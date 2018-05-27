@@ -5,10 +5,9 @@ Original text is in Italian, published under the name "Corso Completo di program
 
 Link to original projects web-site: http://corsodiassembler.ramjam.it/index_en.htm
 
-Contributors:
-Fabio Ciucci,
-Alessandro Sperindé,
-Stefanio Calcagno
+Main author: Fabio Ciucci
+
+Contributors: Alessandro Sperindé, Stefanio Calcagno
 
 Translators:
 Google Translate
