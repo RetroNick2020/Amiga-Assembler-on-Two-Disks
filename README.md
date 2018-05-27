@@ -3,6 +3,8 @@ Project for translating Fabio Ciuccis assembler-course for the Amiga from 1994, 
 
 Original text is in Italian, published under the name "Corso Completo di programmazione assembler in due dischi", 2016, under the GNU License v1.3
 
+Link to original projects web-site: http://corsodiassembler.ramjam.it/index_en.htm
+
 Contributors:
 Fabio Ciucci,
 Alessandro Sperindé,
