@@ -10,8 +10,7 @@ Main author: Fabio Ciucci
 Contributors: Alessandro Sperindé, Stefanio Calcagno
 
 Translators:
-Google Translate
-Roger Bratseth (Lesson 3)
+Google Translate, Roger Bratseth (Lesson 3)
 
 I have chosen to generate ASCII-files that can be used in the Amiga-environment, using Notepad++ with these settings:
 - Format: UTF-8 (without Byte Order Mark, BOM)
