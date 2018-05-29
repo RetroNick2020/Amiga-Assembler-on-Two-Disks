@@ -8,57 +8,57 @@
 	SECTION	CiriCop,CODE	; even in Fast it's fine
 
 Inizio:
-	move.l	4.w,a6			; Execbase in a6
-	jsr		-$78(a6)		; Disable - stop multitasking
-	lea		GfxName(PC),a1	; Pointer to library name in a1
-	jsr		-$198(a6)		; OpenLibrary, EXEC-routine that
-							; opens libraries, by using the
-							; correct offset from the base-
-							; address
-	move.l	d0,GfxBase		; Save address of library base to
-							; GfxBase
+	move.l	4.w,a6		; Execbase in a6
+	jsr	-$78(a6)	; Disable - stop multitasking
+	lea	GfxName(PC),a1	; Pointer to library name in a1
+	jsr	-$198(a6)	; OpenLibrary, EXEC-routine that
+				; opens libraries, by using the
+				; correct offset from the base-address
+	move.l	d0,GfxBase	; Save address of library base to GfxBase
 	move.l	d0,a6
 	move.l	$26(a6),OldCop	; Save address of system copperlist
 	move.l	#COPPERLIST,$dff080	; COP1LC - pointing to our COP
-	move.w	d0,$dff088			; COPJMP1 - Let's  start the COP
+	move.w	d0,$dff088		; COPJMP1 - Let's  start the COP
 
 mouse:
 	cmpi.b	#$ff,$dff006	; VHPOSR - Are we at line 255?
-	bne.s	mouse			; If not yet, do not continue
+	bne.s	mouse		; If not yet, do not continue
 frame:
 	cmpi.b	#$fe,$dff006	; Are we at line 254? (must redo the ride!)
-	bne.s	frame			; If not yet, do not continue
+	bne.s	frame		; If not yet, do not continue
 frame2:
 	cmpi.b	#$fd,$dff006	; Are we at line 253? (must redo the ride!)
-	bne.s	frame2			; If not yet, do not continue
+	bne.s	frame2		; If not yet, do not continue
 
-	bsr.s	MuoviCopper		; A routine that makes the bar go down and up
+	bsr.s	MuoviCopper	; A routine that makes the bar go down and up
 
 
 	btst	#6,$bfe001	; is left mouse-button pressed?
 	bne.s	mouse		; if not, return to mouse:
 
 	move.l	OldCop(PC),$dff080	; COP1LC - Point to system COP
-	move.w	d0,$dff088			; COPJMP1 - let's start the COP
+	move.w	d0,$dff088		; COPJMP1 - let's start the COP
 
 	move.l	4.w,a6			; Execbase in A6
-	jsr		-$7e(a6)		; Enable - re-enable il Multitasking
-	move.l	GfxBase(PC),a1	; Base of lirary to close
-							; (libraries should be opened and closed!!!)
-	jsr		-$19e(a6)		; Closelibrary - close la graphics lib
+	jsr	-$7e(a6)		; Enable - re-enable il Multitasking
+	move.l	GfxBase(PC),a1		; Base of library to close (libraries
+					; should be opened and closed!!!)
+	jsr	-$19e(a6)		; Closelibrary - close la graphics lib
 	rts
 
-;	The "MuoviCopper"-routine modified in style with the "ZOOM" already seen
+;	The "MuoviCopper"-routine modified in style with the "ZOOM" already
+;	seen
 
 MuoviCopper:
 	LEA	BARRA,a0
-	TST.B	SuGiu		; Do we have to go up or down? If SuGiu is reset,
-						; (ie the TST verifies the BEQ) then we skip to
-						; VAIGIU, if instead it is set to $FF (if this TST
-						; is not verified) we continue going up (doing SUBq)
+	TST.B	SuGiu	; Do we have to go up or down? If SuGiu is reset,
+			; (ie the TST verifies the BEQ) then we skip to
+			; VAIGIU, if instead it is set to $FF (if this TST
+			; is not verified) we continue going up (doing SUBq)
 	beq.w	VAIGIU
-	cmpi.b	#$82,8*9(a0); have we arrived at line $82?
-	beq.s	MettiGiu	; if yes, we are at the top and we have to go down
+	cmpi.b	#$82,8*9(a0)	; have we arrived at line $82?
+	beq.s	MettiGiu	; if yes, we are at the top and we have to go
+				; down
 ;	subq.b	#1,(a0)
 	subq.b	#1,8(a0)	; now we change the other waits: the distance 
 	subq.b	#2,8*2(a0)	; between a wait and the other is 8 bytes
@@ -66,20 +66,20 @@ MuoviCopper:
 	subq.b	#4,8*4(a0)
 	subq.b	#5,8*5(a0)
 	subq.b	#6,8*6(a0)
-	subq.b	#7,8*7(a0)	; here we have to change all 9 waits of the red bar
-	subq.b	#8,8*8(a0)	; every time to make it go up!
+	subq.b	#7,8*7(a0)	; here we have to change all 9 waits of the
+	subq.b	#8,8*8(a0)	; red bar every time to make it go up!
 	subq.b	#8,8*9(a0)
 	rts
 
 MettiGiu:
-	clr.b	SuGiu		; By resetting SuGiu, at the "TST.B SuGiu" the BEQ
-	rts					; will skip to the VAIGIU routine, and the bar will
-						; go down
+	clr.b	SuGiu	; By resetting SuGiu, at the "TST.B SuGiu" the BEQ
+	rts		; will skip to the VAIGIU routine, and the bar will
+			; go down
 
 VAIGIU:
 	cmpi.b	#$fa,8*9(a0)	; have we arrived at line $fa?
-	beq.s	MettiSu			; if yes, we are at the bottom and we have to
-							; go up
+	beq.s	MettiSu		; if yes, we are at the bottom and we have to
+				; go up
 ;	addq.b	#1,(a0)
 	addq.b	#1,8(a0)	; now we change the other waits: the distance
 	addq.b	#2,8*2(a0)	; between a wait and the other is 8 bytes
@@ -87,14 +87,14 @@ VAIGIU:
 	addq.b	#4,8*4(a0)
 	addq.b	#5,8*5(a0)
 	addq.b	#6,8*6(a0)
-	addq.b	#7,8*7(a0)	; here we have to change all 9 waits of the red bar
-	addq.b	#8,8*8(a0)	; every time to bring it down
+	addq.b	#7,8*7(a0)	; here we have to change all 9 waits of the
+	addq.b	#8,8*8(a0)	; red bar every time to bring it down
 	addq.b	#8,8*9(a0)
 	rts
 
 MettiSu:
 	move.b	#$ff,SuGiu	; When the SuGiu label is not zero, it means we
-	rts					; have to go up.
+	rts			; have to go up.
 
 SuGiu:
 	dc.b	0,0
@@ -102,15 +102,15 @@ SuGiu:
 GfxName:
 	dc.b	"graphics.library",0,0	
 
-GfxBase:		; Here we store the base address for the graphics.library
+GfxBase:	; Here we store the base address for the graphics.library
 	dc.l	0
 
-OldCop:			; Here we store the address of the old system COP
+OldCop:		; Here we store the address of the old system COP
 	dc.l	0
 
 	SECTION	GRAPHIC,DATA_C	; This command makes AmigaDOS load this data
-							; segment into CHIP RAM, which is mandatory.
-							; The copperlist MUST be in CHIP RAM!
+				; segment into CHIP RAM, which is mandatory.
+				; The copperlist MUST be in CHIP RAM!
 
 COPPERLIST:
 	dc.w	$100,$200	; BPLCON0
@@ -127,7 +127,8 @@ COPPERLIST:
 	dc.w	$180,$005	; lighter blue
 	dc.w	$4e07,$FFFE	; next line
 	dc.w	$180,$006	; blue to 6
-	dc.w	$5007,$FFFE	; jump 2 lines: from $4e to $50, or from 78 to 80
+	dc.w	$5007,$FFFE	; jump 2 lines: from $4e to $50,
+				; or from 78 to 80
 	dc.w	$180,$007	; blue to 7
 	dc.w	$5207,$FFFE	; jump 2 lines
 	dc.w	$180,$008	; blue to 8
