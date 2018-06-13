@@ -1,0 +1,501 @@
+ASSEMBLER COURSE - LESSON 3
+
+Now we will proceed in practice, but first I suggest you to load yourself the
+file 68000.TXT in one of the text buffers of ASM-One. This is a summary of
+Lesson3. This will be useful in case you don't remember addressing or a
+certain instruction reading the listings of this lesson, which requires
+familiarity with the directives and instructions addressed earlier.
+That text explains all the instructions, even those that are almost never
+used, so read it but don't worry if you do not understand the instructions
+with INDEX, as in lesson 3 they will not be used!
+
+In this lesson we start to see something on the screen: to do this we have to
+write a COPPERLIST, ie a program for the COPPER chip that takes care of the
+graphics, which we have already used to change the screen color ($ dff180 is a
+copper register, to set COLOR00).
+For now, however, we have only made changes with the processor directly in the
+registers, and as you could see by executing the listings with AD one
+instruction at a time, when we put a value in COLOR00 (that is $dff180) it
+occurs only a very short flash, and immediately returns to the normal color of
+the operating system, namely the ASMONEs. Just by doing a cycle where you are
+continuously writing a number you can color the whole screen, but once out of
+the small program the color returns unaltered to normal. This happens because
+the screen we see with windows, text and all the rest is the result of a
+COPPERLIST, and precisely one System COPPERLIST. The copperlist is nothing but
+a sort of:
+
+	MOVE.W	#$123,$dff180	; COLOR00 - put value in color 0
+	MOVE.W	#$123,$dff182	; COLOR01 - put value in color 1
+	etcetera...
+
+Which is performed continuously, so here you see why the processor change the
+color back to the system immediately: because the copperlist redefines all the
+colors every fiftieth of a second!!!!
+You will understand that to visualize something on the screen, it is not
+possible to continue looping trying to fight the system copperlist that
+redefines everything simultaneously, but we will have to get rid of the system
+copperlist and make one of our own. NOTHING IS EASIER!
+As I have already written, the copperlist is nothing more than a row of MOVEs
+that put values in the COPPER registers, ie those $dffxxx; however, they are
+not moves made with the processor, but made with the copper, which, not
+surprisingly, executes this COPPERLIST independently while with the processor
+we are doing other things ... this is one of the reasons for which on PCs you
+don't have LIONHEART or PROJECT X as the Amiga.
+So we'll have to write a LIST, as we do for 68000, after which we will have to
+inform the COPPER where ours is to make it read and execute it instead of the
+WorkBench-copperlist.
+The copper has ONLY 3 instructions, of which in practice only 2 are used:
+the two used are the MOVE and the WAIT; the one that no one is using is the
+SKIP, so we'll talk about that only if we find it in a listing for example.
+
+The MOVE is EASY: you have a:
+	MOVE.W	#$123,$dff180	; put RGB-values in COLOR00
+
+It translates into a copperlist like this:
+	dc.w	$180,$123	; they are put into memory directly as
+				; numbers with the dc.w, that's enough
+				; learn 2 instructions only!
+
+That is: you must put the destination address first, without the $dff as we
+have already seen when we put $dff000 in a0, just make $180(a0):
+in the same way the designers have thought well to spare us the effort to make
+$DFF all the time and so just put the $180, or the $182 or any other register
+of the COPPER, in fact ONLY the registers of the Copper can be written by
+COPPERLIST, and can only be accessed to the EVEN registers, like $180, $182...
+never $181, $183!!!!, also you can change only one WORD at a time. As you have
+seen, COPPERLIST does not assemble as the commands of the 68000 that are
+transformed to INSTRUCTIONS like RTS, MOVE .. to $4e75, etc., but you must put
+the BYTES as they are really in memory and how they are read by COPPER
+coprocessor: for the COPPERLIST in fact we must use the DC command to put it
+in memory, but it is very easy. For example to define the first 4 colors:
+
+COPPERLIST:
+	dc.w	$180,$000	; COLOR 0 = BLACK
+	dc.w	$182,$f00	; COLOR 1 = RED
+	dc.w	$184,$0F0	; COLOR 3 = GREEN
+	dc.w	$186,$00F	; COLOR 4 = BLUE
+
+Do you remember the color format? RGB = RED, GREEN, BLUE.
+To get help at all times on the meaning of the $dffXXX registers make "=C 180"
+or "=C number" and you will have a short summary (in English). (translators
+remark: on my ASM-One v1.29 I have to use "=r 180" instead, =c brings up a
+color-selector, = with a space before r gives you info about your workspace).
+For example, make "=c 006" and you will see the name and explanation of the
+register that you used to make the color flash. To see all the registers just
+make a "=C".
+The WAIT instead serves to wait for a certain line on the screen, for example
+if you want to make the background color (color0) black down to halfway, while
+in the lower half you want blue, just put a
+
+	dc.w	$180,0		; color 0 BLACK
+
+followed by a WAIT waiting in the middle of the screen, after which you put
+
+	dc.w	$180,$00F	; color 0 BLUE
+
+With this trick you can change the entire palette (colors) to any line of the
+video-signal, something that on PC in VGA you can not even dream about, in
+fact although the Amiga games usually have screens of only 32 colors, changing
+the color palette every so often as the screen goes down you can make more
+shades than a 256-color VGA, especially if it is considered that with a single
+background color one can make a nuance changing the color to each line, as we
+will do in the first listing of this lesson.
+
+The WAIT command appears in this form: 
+
+	dc.w	$1007,$FFFE	; WAIT coordinates Y = $10, X = $07
+
+This command means: WAIT for VERTICAL line $10, HORIZONTAL position 7 (ie at
+the seventh position starting from the left; the points are called PIXEL.
+(Translators remark: The X-positions have to be ODD numbers, each step is 4
+pixels in lores. Visible values are in the range $31-$e1).
+The $FFFE means WAIT, and should always be present, while the first byte is
+the line (y) to wait for and the second byte is the horizontal position (x).
+
+The screen is in fact made up of many points arranged next to each other,
+like a very small checkered sheet, like for example graph paper.
+To indicate the point (pixel) located (as in the naval battle) to position
+16.7, or 16 points from the top edge of the sheet towards the bottom and 7
+from the left edge to the right, we write $1007. ($10 = 16!).
+Usually it is enough to indicate the horizontal line at its beginning, (the
+position is $07 instead of $01 because the latter is out of the monitor at
+the extreme left).
+The WAIT instruction is also used to terminate the COPPERLIST: in fact to
+indicate the end of the COP we must put a:
+
+	dc.w	$FFFF,$FFFE	; End of Copperlist
+
+Which by convention the Copper considers the end, also because it indicates a
+wait for a line and horizontal position that does not exist! (the copperlist
+then starts again).
+
+The word was spread long ago that two end instructions would be needed in the
+copperlist instead of just one for some old Amiga models, but it seems to be
+a mass psychosis, since no one has ever used two and everything has always
+been working.
+
+One last thing: to make our copperlist, that for now is free of drawings,
+only having color nuances, we must disable the BITPLANE, that is the BIT
+PLANES that overlap giving rise to the graphics. To do this just add the line
+DC.W $100,$200, that is, we put the $200 value in the $dff100, which is the
+bitplane check register.
+
+NOW WE ARE ABLE TO COMPLETE THE COPPERLIST, WAITING FOR YOUR SCREEN SPLIT AND
+COLORCHANGE!
+
+COPPERLIST:
+	dc.w	$100,$200	; BPLCON0 No graphics, only the background 
+	dc.w	$180,0		; Color 0 BLACK
+	dc.w	$7f07,$FFFE	; WAIT – Wait for line $7f (127)
+	dc.w	$180,$00F	; Color 0 BLUE
+	dc.w	$FFFF,$FFFE	; END OF COPPERLIST
+
+Considering that to verify the functionality of your copperlist you will have
+to make some shades of color, here is a REFERENCE TABLE FOR THE CHOICE OF
+COLORS WITH THE COPPER:
+
+The Amiga has 32 color registers for 32 different colors:
+
+	$dff180		; color0 (background)
+	$dff182		; color1
+	$dff184		; color2
+	$dff186		; color3
+	...
+	$dff1be		; color31
+
+In each of these 32 color registers you can select one of the 4096 colors
+viewable, "mixing" the 3 basic colors RED, GREEN, BLUE.
+Each of these 3 colors can have an intensity from 0 to 15, or 16 tones.
+In fact, the maximum number of combinations is 16 * 16 * 16 = 4096, or 16 RED
+multiplied 16 GREEN multiplied 16 BLUE.
+
+The color value can be set with the processor or with the COPPER:
+	move.w	#$000,$dff180	; color BLACK in color0
+	dc.w	$180,$FFF	; color WHITE in color0
+
+In this example we have seen the two extremes: $FFF, or WHITE, and $000, that
+is BLACK. In fact, to choose the color, it is necessary to bear in mind that
+the WORD of the color is composed like this:
+
+	dc.w	$0RGB
+
+where the fourth zero is unused, while:
+	R	=	componente ROSSA (RED)
+	G	=	componente VERDE (GREEN)
+	B	=	componente BLU  (BLUE)
+
+In fact the bits from 15 to 12 are not used, the bits from 11 to 8 are the
+RED, those from 7 to 4 are GREEN, those from 3 to 0 are the BLUE.
+Each RGB color, as already mentioned, can have a value from 0 to 15, ie from
+0 to $F in hexadecimal, so it's easy to choose the color:
+
+$FFF = White
+$D00 = Brick red
+$F00 = Red
+$F80 = Red-Orange
+$F90 = Orange
+$FB0 = Yellow gold
+$FD0 = Yellow-Cadmium
+$FF0 = Lemon
+$8E0 = Light green
+$0F0 = Green
+$2C0 = Dark green
+$0B1 = Tree green
+$0DB = Water
+$1FB = Clear water
+$6FE = Blue sky
+$6CE = Light blue
+$00F = Blue
+$61F = Bright blue
+$06D = Dark blue
+$C1F = Violet
+$FAC = Rosa
+$DB9 = Beige
+$C80 = Brown
+$A87 = Dark brown
+$999 = Medium gray
+$000 = black 
+
+Now the problem is just how to force the copper to execute orders from our
+COPPERLIST diverting its attention from that of the WorkBench; but there is
+also another problem: if we do our own, what do we do after coming out to let
+the copper reread the system ???
+
+Answer: You have to mark yourself on a piece of paper where it was !!!
+
+That is: we mark it in a special longword called OLDCOP, that is OLD
+COPPERLIST, the system one.
+
+But who should we ask where to find the system copperlist? The operating
+system of course!! To ask it, we'll have to run routines that reside in the
+kickstart CHIP!!! To do this you must always refer to the address in the
+memory location $4, which is written by the kickstart and contains the
+address from which you can make the prefixed addressing distances, which we
+will discuss later.
+
+To collect the longword at $4 just do a:
+
+	MOVE.L	$4,a6	; Now we have the ExecBase in a6
+
+Or better:
+
+	MOVE.L	4.w,a6	; In fact, 4 is a small number and can be
+			; written 4.w, which saves space. (writes
+			; the statement with $ 0004 instead of
+			; writing it with $ 00000004, where
+			; the first zeros do not serve any purpose. IT IS
+			; ALWAYS MOVED A LONGWORD! In this case
+			; the longword contained in the 4 bytes
+			; from address 4, 5, 6 and 7.
+
+Once the address that was contained in $4 is put in a6, we can execute the
+kickstart routines by making JSRs with the correct addressing distance, in
+fact there are precise address distances that correspond to certain routines
+already in the kickstart.
+We now know that if we do, for example, a JSR -$78(a6), we disable
+multitasking!!! That is, only our program is executed! Let's do it now! Load
+LEZIONE3a.s into an Fx buffer and run it.
+
+But the Exec does not take care of everything: the kickstart, 256k long if it
+is the version 1.2 or 1.3, or 512k long if it is 2.0 or 3.0, is divided into
+libraries, or "collections" of ready-made routines that can be called, and
+since every kickstart is different just physically, for example the Exec
+routine that disables the system operating in kick 1.3 could be $fc1000,
+while in 1.2 or 2.0 at a different address, yet the dear designers have had
+one of their clamorous ideas:
+
+"BECAUSE WE PUT THE BASE OF THE LIBRARY IN MEMORY POSITION 4 FROM WHICH YOU
+CAN ALWAYS EXECUTE THE SAME ROUTINE BY DOING A JSR WITH THE SAME OFFSET (OR
+ADDRESSING DISTANCE)"
+
+(P.S. JSR is like BSR, only that it can run routines in any part of the
+memory, while the bsr can run if they are within 32768 bytes forward or
+backward).
+
+And that's what they did! For example, to perform the Disable disabling the
+operating system, on all Kickstarts, just do:
+
+	move.l	4.w,a6		; Address of Exec in a6
+	jsr	-$78(a6)	; Disable - block multitasking
+	bsr.w	mioprogramma
+	jsr	-$7e(a6)	; Enable - restart multitasking
+
+In every kickstart the routine will be at a different address, but doing it
+this way we are always sure to perform that routine. You just has to know the
+addressing distance of the different routines of the operating system to run
+them, but we are only interested in saving the address of the system
+copperlist, and to do so we must turn to a part of the routines of the kick
+called: graphics.library, ie the one dealing with GRAPHICS, only at the
+operating system level, not at the hardware level.
+
+To access the graphics library it must be opened, that is to say:
+	move.l	4.w,a6		; Execbase in a6
+	lea	GfxName,a1	; Address of string with library
+				; to open i a1
+	jsr	-$198(a6)	; OpenLibrary, Exec-routine that
+				; opens libraries
+	move.l	d0,GfxBase	; Store address to base of library
+				; in GfxBase
+	....
+
+GfxName:
+	dc.b	"graphics.library",0,0	; NOTE: to put characters in
+					; memory always use the dc.b
+					; and put them between " " or '' 
+GfxBase:
+	dc.l 0
+
+In this case we used the routine of the Exec OpenLibrary. It requires that A1
+has the address of the text with the name of the library to open. For example,
+we could open other libraries like "dos.library" to open files or similar,
+"intuition.library" to open windows etc.
+
+Once performed you will find the address of the library in question in d0,
+from which to make JSRs with offsets regarding the graphics. In addition to
+the JSRs, we also know that, for example, the address of the current system
+COPPERLIST is located at $26 bytes after the GfxBase, so we will continue our
+program by saving that address in an OldCop label:
+
+	move.l	4.w,a6		; Execbase in a6
+	lea	GfxName,a1	; Pointer to name of library to
+				; open in a1
+	jsr	-$198(a6)	; OpenLibrary
+	move.l	d0,GfxBase	; Save address of library base to GfxBase
+	move.l	d0,a6
+	move.l	$26(a6),OldCop	; Save address of system copperlist
+
+GfxName:
+	dc.b	"graphics.library",0,0
+GfxBase:
+	dc.l	0
+
+OldCop:
+	dc.l 0
+
+Now we can point to our copperlist, we can put a MouseWait and after that
+reestablish the old cop; to point I intend to put the address of our
+copperlist in the COP1LC register, ie $dff080, which is the pointer to the
+copperlist in the sense that the copper performs the copperlist whose address
+is in $dff080:
+Just put the address in $dff080, then to start the copperlist just write in
+the register $dff088 (COPJMP1) anything, as long as you write or read it.
+This will start the copperlist, it is a so-called STROBE-register, like a
+button that you touch (DO NOT USE, however, CLR.W $dff088, that will cause
+problems).
+Our copperlist will be executed repeatedly every frame until the address is
+changed in $dff080 (COP1LC).
+One problem is that the $dff080 is write-only, in fact if you try to do a
+"=c 080" you will notice the WRITE W. To be able to replace the system
+copperlist, the one that displays the Asmone or the Workbench, not being able
+to read the address from $dff080, we will have to ask the operating system
+which one to put in, and this can be done with kickstart routines: once you
+get the address of that copperlist we will save it in a LONGWORD of our
+program, then we will point our copperlist, and at the exit of the program we
+will replace it with the old one.
+
+	move.l	4.w,a6		; Execbase in a6
+	jsr	-$78(a6)	; Disable - stop multitasking
+	lea	GfxName,a1	; Pointer to library name in a1
+	jsr	-$198(a6)	; OpenLibrary, EXEC-routine that
+				; opens libraries, by using the
+				; correct offset from the base-address
+	move.l	d0,GfxBase	; Save address of library base to GfxBase
+	move.l	d0,a6
+	move.l	$26(a6),OldCop	; Save address of system copperlist
+	move.l	#COPPERLIST,$dff080	; COP1LC - pointing to our COP
+	move.w	d0,$dff088		; COPJMP1 - Let's  start the COP
+mouse:
+	btst	#6,$bfe001
+	bne.s	mouse
+
+	move.l	OldCop(PC),$dff080	; COP1LC - point to system COP
+	move.w	d0,$dff088		; COPJMP1 - Let's start the COP
+
+	move.l	4.w,a6
+	jsr	-$7e(a6)	; Enable - restart Multitasking
+	move.l	gfxbase(PC),a1	; Base of the library to be closed
+				; (the libraries must be opened and
+				; closed !!!) 
+	jsr	-$19e(a6)	; Closelibrary - we close the
+				; graphics library
+	rts
+
+GfxName:
+	dc.b	"graphics.library",0,0	; NOTE: to put characters in
+					; memory always use the dc.b
+					; and put them between " " or '' 
+GfxBase:
+	dc.l	0
+
+OldCop:
+	dc.l	0
+
+COPPERLIST:
+	dc.w	$100,$200	; BPLCON0 - No gfx, only the background 
+	dc.w	$180,0		; Color 0 BLACK
+	dc.w	$7f07,$FFFE	; WAIT - Wait for line $7f (127)
+	dc.w	$180,$00F	; Color 0 BLUE
+	dc.w	$FFFF,$FFFE	; FINE DELLA COPPERLIST
+
+
+You will find this example with suggestions and changes in Lesson3b.s. Load
+it into the F2 buffer or any other and admire the first program of the course
+"BATTE NEL METALLO" of the Amiga CHIPS.
+
+Did you do your copperlist experiments? Well, let's now make some moving
+effect. To begin with, however, I must inform you that to make any movement
+you need to synchronize the routines with the electronic brush that redraws
+the screen. For those who did not know in fact the screen is refreshed 50
+times per second, and the movements appearing there smooth, such as those of
+better-programmed videogames, are shifts which coincide with the fiftieth of
+a second. We have already used the register $ dff006, which as we have seen
+changes continuously, precisely because there is the position of the
+electronic brush, which starts from zero, that is from the highest part of
+the screen, and arrives at the bottom 50 times a second. If we do a routine
+that makes movements on the video without timing it, it will go to the actual
+speed of the processor, therefore too fast to see something. To wait for a
+certain video line, just read the first byte of the $ dff006, in which we
+find the line reached, ie the vertical position (same as the COPPER WAIT):
+
+WaitLinea:
+	CMPI.B	#$f0,$dff006	; VHPOSR - Are we at line $f0? (240)?
+	bne.s	WaitLinea	; If no, test again
+	...
+
+This cycle waits for line 240, after which the execution continues with the
+following instructions, such as the mouse routine waiting for the press of
+the key, after which the execution continues. We also insert the WaitMouse:
+
+mouse:
+	cmpi.b	#$f0,$dff006	; VHPOSR - Are we at line 240?
+	bne.s	mouse		; If not yet, do not continue
+
+	bsr.s	RoutineTemporizzata	; This routine is performed only
+					; once for each frame 
+
+	bsr.s	MuoviCopper		; The first movement on the
+					; screen !!!!!
+
+	btst	#6,$bfe001	; left mouse-button pressed?
+	bne.s	mouse		; if no, return to mouse:
+	rts
+
+At this point we have a routine that executes a routine only once for every
+video FRAME, that is, for every frame, that is 1 time every fiftieth of a
+second, and more exactly it is performed as soon as we have arrived at line
+240, after which, once executed, it will not be performed again until we are
+back on line 240, on the next frame.
+
+NOTE: The image is drawn with the RASTER technique using an electronic brush,
+which starts to draw from the first line on the top left, it continues to the
+right until the end of the line, then starts again from the extreme left of
+line 2, to go to the right etc., similar to the path we do when reading text:
+each line from left to right, starting from the first in other ends to the
+last one below, after that the eletronic brush starts from the first line,
+first point on the left, like if we have finished reading a book page, start
+reading it again instead of reading the following page. On the other hand,
+the monitor must write on that only, the brush does not write on the wall.
+
+Take the LEZIONE3c.s example in another text buffer and try it out.
+
+This example moves down a WAIT and by that also the following color when you
+press the right mouse button. Left button to exit.
+
+Did you look at Lesson3c.s? There we complicate things slightly! load the
+Lesson3c2.s in a buffer and study it, I added a control of the line reached
+to stop the scroll.
+
+All clear in Lezione3c2.s ?? Well, let's continue with the practice by
+loading the Lesson3c3.s, in which a gradient bar is moved with 10 WAITs
+instead of a single WAIT line. Increasingly difficult!!!
+
+Are you still alive after Lesson3c3.s? Massacre the brain with the next
+lesson, the Lesson3c4.s, in which we go from 10 BARRA labels to a single
+label performing addressing distances.
+
+Well, it was not that difficult. The hard part comes now with Lesson3d.s, in
+which the bar goes up and down, and we will also change the speed of the bar.
+
+Did you understand Lesson3d.s? Yes? I do not believe it! You seem to have
+understood, this can not happen... I would study the source again for a
+moment before going on... having reviewed it? Well... then load a variation
+on the theme, Lesson3d2.s
+
+Now you are ready to face Lesson3e.s, which explains how to do a RASTERBAR
+that is a cyclical color sliding effect.
+
+Another special case: How do you get to the PAL area (after $FF) with the
+copper wait in Lesson3f.s.
+
+To complete the lesson3.txt, load the Lesson3g.s, and Lesson3h.s, concerning
+a sliding sideways instead of up and down, after which you will be ready for
+LESSON4.TXT, in which we manage colorful images and possible effects on them!
+
+NOTE:
+The Examples4x.s of LEZIONE4.TXT are in the SOURCES2 directory, so you have
+to do a "V DF0:SOURCES2" to make it possible to include images from that
+directory. Then load the LEZIONE4.TXT in this or another text buffer. (with 
+"r")
+
+* Congratulations on arriving here! The big one is done! Now going forward
+you will understand easily, having entered the logic of ASM! programming.
