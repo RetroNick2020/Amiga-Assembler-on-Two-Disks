@@ -17,3 +17,6 @@ I have chosen to generate ASCII-files that can be used in the Amiga-environment,
 - End Of Line-convention: Unix (LF)
 - TAB-size: 8
 - And adjusting the width of the Notedpad++-window to get a wordwrap around column 79, for placing LF in the right place.
+
+This is an on-going process. Parts of the translating tasks can be automated, but one still need to verify that the text makes sense.
+Feel free to join. I am currently working on lesson 3, 4, 5 and 9.
