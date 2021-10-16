@@ -1,0 +1,1845 @@
+
+                                  '''
+                                 (o o)
++---------------------------oOOO--(_)-------------------------------------+
+|                                                                         |
+|                   CORSO DI ASSEMBLER - LEZIONE 9                        |
+|                                                                         |
++--------------------------------------oOOO-------------------------------+
+                                |__|__|
+                                 || ||
+                                ooO Ooo
+
+Authors: Luca Forlizzi, Alvise Spanò, Fabio Ciucci
+
+(Directory Sorgenti5) - so write "V Assembler2:sorgenti5"
+
+     ·×X×··×X×··×X×··×X×··×X×··×X×··×X×··×X×··×X×··×X×··×X×··×X×·
+                              IL BLITTER
+     ·×X×··×X×··×X×··×X×··×X×··×X×··×X×··×X×··×X×··×X×··×X×··×X×·
+
+In this lesson we will start talking about the blitter. Anyone who owns an 
+Amiga will surely have heard of this special circuit placed inside his 
+computer which turns out to be one of its greatest strengths when compared 
+with other computers. However, not everyone knows what the blitter really is 
+and for what reasons it is so useful. In fact, most of the special effects 
+that you can admire in the demos (such as sinusoidal scroll text or 
+vectorballs) make use of the blitter. So, you ask yourself, how come these 
+effects can be achieved even on PCs that do not have the blitter? The reason 
+is that actually everything the blitter can do could be done with the 
+microprocessor, and that's exactly how PCs do. The blitter, however, is able 
+to perform its tasks much faster, in some cases even 10 times faster. It is 
+thanks to the blitter that special effects that with a PC can only be 
+achieved if you have a fast 386 or even a 486 available, while they are 
+routine for an Amiga 500 whose processor (68000 at 7Mhz as you well know) is 
+much slower than 386 and 486. So you will understand that for those who want 
+to program demos or games on the Amiga, the knowledge of the blitter is 
+essential. We will begin the study of the blitter's capabilities starting 
+from the simplest ones, which at first glance might seem miserable, but which 
+we will gradually discover hide the power that has allowed the creation of 
+the most spectacular games and demos. It should be noted, however, that 
+programs written for 68020+ often tend to use the CPU instead of the blitter, 
+since the latter does not increase in speed.
+
+      .    .
+  ,      ,   ,  ..            ______________
+    .     ..     · ..        /      ,      ¬\           ____
+      .    ·:: ..   ·:. .:,_/  ¯¯¯¯¯  -----' \         `----'
+                ·::: ..: ::`________  ________\ ____________________
+    .·  :·  · :::. . .  ·:  )(  ¬(X ) ) ×)¯ )  \                  _/
+           ,   :::·.  ..:. ,  ¯¯¯¯¯¯ (¯¯¯¯¯¯   /_____________ ___ T
+       ·:    .       . · '¯\_   _    ¯\  _   _/   `-----||( ¡¡:::!|
+  .       :·      .        /    /   (,_) \    \ xCz     ll  !|:::||
+     .,             _______\   / ________ \   /_______   ¯¯T |:::||
+                  /ØØØØØØØØØ\   /_T_T_T_T\   /ØØØØØØØØØ\   | !¦¦¦!|
+                 /ØØØØØØØØØØØ\__¯ ¯ ¯ ¯ ¯¯__/ØØØØØØØØØØØ\  l______!
+                /ØØØØØØØØØØØØØØ`----------'ØØØØØØØØØØØØØØ\  `----'
+               ·ØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØØ·
+
+
+*******************************************************************************
+*                          FUNZIONI DEL BLITTER	                              *
+*******************************************************************************
+
+The word "blitter" is an abbreviation of "BLock Image TransferER" or "image block copier". The blitter is therefore a tool that allows us to move "pieces" of images. Actually, as you will discover later, this is just one of the blitter's capabilities, which is capable of even more complex operations.
+As you know, an image inside the Amiga is simply made up of a memory area that contains the data that define the color of each single pixel. If you don't remember how the images are formed, you should go over lessons 4 and 5 before continuing on. When the blitter performs an operation on a "piece" of image, it is actually working on the memory area that forms the "piece" of image in question. In effect, the blitter simply operates on memory areas, regardless of whether they contain a graphic image, sound or program code.
+This means that the blitter can also be used in non-graphics related tasks.
+It is important to specify, however, that the blitter, like the copper, the audio circuits and all the rest of the "custom" Amiga chips, is not able to operate on all the available memory, but only on a part of it called "chip ram".
+
+To access the memory, the blitter uses the DMA channels mentioned in generic terms in lesson 8, to which I refer you in case of doubt.
+The blitter has 4 DMA channels available, 3 of which (called A, B and C) are used to READ data from RAM (and for this reason they are called "source" channels) while the fourth (channel D) is used to WRITE to the memory (and therefore it is called "destination" channel). Like all DMA channels, the blitter channels transfer one word of data at a time.
+
+The general scheme of a blitter operation (called "BLIT") is very simple: the blitter, through channels A, B and C, reads data from the memory, performs operations on them and writes the results into memory through channel D. To perform a blit it is therefore necessary to specify the
+following information:
+
+1) which channels to use for this operation
+2) what operation to perform on the data read
+3) for each channel used, the address where to start reading and writing
+4) how much data to read or write
+
+Note that the amount of data read (or written) during an operation is the same for all four channels: if in an operation I use channels A, B and D, the number of words that are read through channel A is equal to the number of words that are read through channel B and the number of words that are written through channel D.
+
+This information is specified through some hardware registers.
+The registers that control the blitter are, like all hardware registers,
+16-bit. However, there are many registers which have consecutive addresses.
+This fact makes it possible to access it in pairs using "move.l" instead of "move.w", similarly to what we have seen for the pairs of registers BPLxPT ($ dff0e0 ...) and COPxLC ($ dff080 ...) .
+
+Before starting to write in the registers, however, it is necessary to be sure that the blitter is stopped, that is, that it is not already performing another operation.
+It is essential to wait until the last "blit" is over before making another one, otherwise it could cause explosions and collapses within a radius of 100 meters, a real cataclysm, comparable to an aerial bombardment.
+
+To know if the blitter is stopped or is "blitting", just check the status of a bit (bit 6) of the DMACONR register ($ dff002).
+If this bit is 1 then the blitter is working, while if it is 0 it means that the blitter is finished.
+In practice, a simple assembler instruction is therefore sufficient:
+
+
+AspettaBlit:
+	btst	#6,$dff002	; dmaconr - il blitter ha finito?
+	bne.s	AspettaBlit	; Non andare avanti fino a che non ha finito
+
+
+Unfortunately, to complicate things there is a very annoying hardware BUG in the first versions of the Agnus chip (the chip that contains the blitter) due to which the first time a reading of the bit in question is made, the result is wrong: it is necessary to carry out an empty reading before being able to know exactly the status of the bit.
+
+After making sure that the blitter is stopped, we can write in the registers the information it needs for the blitter and what we have listed above.
+
+Now let's see in detail how to proceed.
+
+1) For each blit we can independently enable or disable the DMA channels, in order to use only those that interest us, by means of the enable bits which, if they are set to 1, enable the channel;
+  if they are reset, they disable it. The enable bits are found in the control register BLTCON0 ($ dff040):
+
+canale		nome bit di abilitazione	posizione del bit in BLTCON0
+
+  A			SRCA				8
+  B			SRCB				9
+  C			SRCC				10
+  D			DEST				11
+
+2) To specify which operation to carry out, bits 0 to 7 of the BLTCON0 control register, called MINTERMS, are used. The value these bits assume determines the operation performed by the blitter. The functioning of MINTERMS is quite complicated, and we will explain it in detail later.
+
+3) Now let's see how to indicate the starting addresses of the channels.
+  A pointer to the chip RAM is connected to each channel and is used to store the starting address of an operation. During the operation the value contained in the pointer will vary automatically, indicating each time the address of the word that the blitter reads or writes.
+  A pointer is made up (as for the DMA channels of sprites and planes) by a pair of 16-bit registers, one that contains the least significant (i.e. lower) 16 bits and one that contains the remaining (high) bits.
+  This table summarizes the names and addresses of the pointers:
+
+canale		registro alto			registro basso
+
+		nome	   indirizzo		nome	   indirizzo
+
+  A		BLTAPTH	   $DFF050		BLTAPTL	   $DFF052
+  B		BLTBPTH	   $DFF04C		BLTBPTL	   $DFF04E
+  C		BLTCPTH	   $DFF048		BLTCPTL	   $DFF04A
+  D		BLTDPTH	   $DFF054		BLTDPTL	   $DFF056
+
+Clearly, these pairs of registers can be treated as single 32-bit registers - as for pointers to CopperLists and Plane -, and, therefore, be written with a single "move.l" instruction at the address of BLTxPTH. Therefore from now on we will consider them as single 32-bit registers, using the names of BLTxPT and referring to the addresses $ dff050, $ dff04c, $ dff048 and $ dff054 (except for any exceptions that will be duly reported).
+
+The pointer registers should be written with an address in bytes, but since the blitter works only on WORDS, the least significant bit of our address is ignored, so it must be remembered that the addresses must be EVEN, ie aligned with WORDS.
+Therefore it must be remembered that you can only write EVEN addresses of the CHIP memory, both for the sources and for the destination.
+
+NOTA: Set the unused bits to zero, especially those that have no function even in ECS, as in future versions they could be used for who knows what purposes and the results would be unpredictable.
+
+4) The last thing to do is to indicate the amount of data to be read or written. This is done via the BLTSIZE register ($ dff058). This register allows the blitter to consider the data it reads and writes not as a simple sequence of words, but as a sort of two-dimensional rectangle composed of words. For example the blitter considers a sequence of 8 words, as a rectangle 8 words wide and 1 line high:
+
+                           Larghezza=8 WORD
+                     _______________|_______________
+                    /                               \
+
+                   una word
+                     _|_
+                    /   \ 
+                 /  +---+---+---+---+---+---+---+---+
+Altezza=1 LINEA -   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+                 \  +---+---+---+---+---+---+---+---+
+
+			fig. 1	rettangolo di words 8*1
+
+Let's take another example: a sequence of 50 words can be considered as a rectangle of 10 words X 5 lines:
+
+
+                           Larghezza=10 WORD
+                     _______________|_______________
+                    /                               \
+
+                   una word
+                     _|_
+                    /   \ 
+                  / +---+---+---+---+---+---+---+---+---+---+
+                 |  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+                 |  +---+---+---+---+---+---+---+---+---+---+
+                 |  |   |   |   |   |   |   |   |   |   |   |
+                 |  +---+---+---+---+---+---+---+---+---+---+
+Altezza=5 LINEE -|  |   |   |   |   |   |   |   |   |   |   |
+                 |  +---+---+---+---+---+---+---+---+---+---+
+                 |  |   |   |   |   |   |   |   |   |   |   |
+                 |  +---+---+---+---+---+---+---+---+---+---+
+                 |  |   |   |   |   |   |   |   |   |   |   |
+                 \  +---+---+---+---+---+---+---+---+---+---+
+
+			fig. 2	rettangolo di words 10*5
+
+This fact that at first glance may seem like an unnecessary complication is actually one of the characteristics that make the blitter so powerful.
+In a moment we will see why. But first let's see how BLTSIZE works. To specify the amount of data involved in the blit, write the dimensions of the rectangle of words that the data form in BLTSIZE.
+The horizontal dimension must be expressed in the 6 low bits, that is the NUMBER OF WORDS that make up each horizontal line; in the top 10 bits the NUMBER OF horizontal LINES making up the rectangle must be expressed: in essence, the width in X of the rectangle goes in the lower 6 bits, the height in Y of the aforementioned rectangle goes in the upper 10 bits.
+Note that if the value of the high 10 bits (height) is 0, the blitter
+blits 1024 lines, and if the value of the low 6 bits (word width) is 0, the blitter blits 64 words: therefore, the biggest blit is obtained by typing "move.w # $ 0000, $ dff058".
+It will be 64 words X 1024 lines (= 64 * 2 * 1024 = 128 Kb).
+The BLTSIZE register also has another very important function: BY WRITING THE SIZE, THE BLITTER IS ACTIVATED, starting the specified operation.
+For this reason, YOU MUST WRITE IN THE BLTSIZE REGISTER ALWAYS AFTER WRITING IN ALL THE OTHER REGISTERS OF THE BLITTER, otherwise the blitz will start before you have correctly set all the registers, producing different results from those desired.
+
+	                    ._________________
+	                    |    _________    |
+	                    |   (_________)   |
+	                    |_________________|
+	                     |:·            ·|
+	                    _|______   ______|_
+	                     |______. .______|
+	                   _/       |^|       \_
+	                 __\\_______|_|_______//__
+	                /__/    __(_____)__    \__\
+	               //\/    /           \    \/\\
+	               \_/    /_____________\    \_/
+	                /    /¯    _____    ¯\    \
+	                \        _  /    _        /  ___________
+	    .____________\_______(       )_______/__/           \
+	    | ___/                \_____/          / _     _   _ \
+	    | | \_________________________________/  \|    |   |  \
+	    | |      g®m|         _________      /    \    |   |   \
+	  __| |__       |       ¯¯   /|\   ¯¯   /______\___|___|___/
+	 /       \ _____|___________  |  ______//______\\     )
+	(__|_| |_//                 \_|_/      \        /____/
+	     |_| /___________________\ /_____ __\______/____\
+
+
+At this point it is good to put into practice what has been learned so far, looking at some examples. In these examples we also use registers that we have not yet talked about, such as BLTDMOD and BLTCON1.
+Ignore them for now, we'll explain them later.
+
+In Lesson9a1.s you will see how to clear a memory area using the blitter.
+To perform an erase operation it is necessary to use only the D channel, as the only thing we have to do is to write the zeroed words in the memory. Disabling the source channel, the value $ 00 will be written to the destination.
+Furthermore, to define an erase operation it is necessary to write the value $ 00 in the MINTERMS, that is, in the bits 0-7 (the low byte) of the BLTCON0 register.
+
+In lesson9a2.s instead we will use the blitter to copy data from one memory area to another. For this operation we will use channels A and D.
+The data will be read from memory via channel A and will be written
+via channel D. To define a copy operation from channel A to channel D it is necessary to write the value $ F0 in the MINTERMS.
+
+		__________
+		\ AMIGA! /       lllll
+		 \ !!!! /     __/     \__
+		  \____/      \/ (o!o) \/
+		    ||        / \_____/ \
+		    ||       /___________\\\\\
+		    ||           _| |_     \  \
+		    ||__________/     \_____\_ \
+		    ()(________/       \________)
+		    ||        /_________\
+		    ||       (_____°_____)
+		    ||        \    Y    /
+		    ||       __\___|___/__
+		  __||____ __\_____!_____/_____
+
+*******************************************************************************
+*		PRIME APPLICAZIONI DEL BLITTER				      *
+*******************************************************************************
+
+We will now start using blitter in graphics applications. We know that an image is made up of words of data in memory. Since through the blitter we can perform operations on the memory, by modifying the data that make up an image we cause a modification of the image itself.
+So let's do a brief review on the representation of the images, limiting ourselves for now to the case of a single bit-plane.
+
+A bit-plane is a set of words, each of which represents the state of a pixel: one word represents 16 pixels arranged horizontally.
+The first word of the bit-plane represents the leftmost 16 pixels of the first line of the image.
+The following words represent in order all the pixels of the first row.
+When the pixels of the first row are finished, we start in the same way with those of the second.
+If on a line there are for example 320 pixels, 320/16 = 20 words are needed to represent it all; therefore the first 20 words of the bit-plane represent the first row of the image, the words from the 21st to the 39th represent the second row, etc.:
+
+		 ____ ____ ____ ____ _ _ _ _ _ _ ____
+		|    |    |    |    |		|    |
+		| 0  | 1  |  2 |  3 |	        | 19 |
+		|____|____|____|____|		|____|
+		|    |    |    |    |		|    |
+		| 20 | 21 | 22 | 23 |		| 39 |
+		|____|____|____|____|		|____|
+		|    |    |    |    |		|    |
+		| 40 | 41 | 42 | 43 |		| 59 |
+		|____|____|____|____|		|____|
+		|				     |
+		|				     |
+
+
+		|____ ____ ____ ____		 ____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |		|    |
+		|____|____|____|____|_ _ _ _ _ _|____|
+
+		Fig. 3  Rappresentazione in memoria di un'immagine:
+		        ogni quadrato e` una word
+
+We have seen that with the blitter we can copy data from one point of memory to another. If we copy data into a bit-plane, the values we copied will be used to form the image on the screen. Since the blitter, as we have said, works on WORD size data (16 bit), it allows us to modify the image in groups of WORDs, that is, in groups of 16 pixels.
+For example, if with the blitter we write over the 21-th word of the bitplane shown in the figure, we will modify the leftmost 16 pixels of the second line of the image. Now suppose we have a single line high image and a certain number L of pixels wide. Precisely due to the fact that the bit-plane is divided into words, which contain 16 pixels, it is convenient that the width in pixels of our image, that is L, is a multiple number of 16, so that the image is contained exactly in L / 16 word. This can be achieved by adding pixels of value 0 to the end of our image, as illustrated by the following example:
+
+This is an image 20 pixels wide and one line high.
+
+	11001101010100011001
+	\__________________/
+ 		 |
+	     20 pixel
+
+It is not comfortable to handle because 20 is not a multiple of 16. Then we add some pixels of value 0 to the end in order to make the width equal to 32 pixels, that is to say equal to a multiple of 16.
+
+	11001101010100011001000000000000
+	\______________________________/
+		|
+	    32 pixel
+
+Our image is stored in the data in our program. To make it appear on the screen, we need to copy it to the memory area dedicated to the bit-plane. The image will assume a corresponding position on the screen to the words of the bit-plane in which we will copy it. Suppose we want to draw the image on the screen in such a way that the first pixel of it, that is the pixel on the left, assumes the coordinates X and Y (I remind you that the coordinate system of the screen has the origin, i.e. the coordinate point X = 0 and Y = 0, in the upper left corner, the X coordinates grow going to the right while the Y grow going down).
+This pixel was contained in a word of the bit-plane.
+For the moment, let's just consider the case where X is also a multiple of 16. This ensures that our pixel is the first (ie the leftmost pixel) of the word it belongs to. In this way, once the address of this word has been calculated, we can copy (with the blitter) the first word of the image. The other words that form our image will naturally be copied to the subsequent words of the bit-plane.
+All this, since the blitter is able to copy word sequences, can be done with a single blit that has as source address the first word of the image, and as destination address, the address of the word of the bit- plane to which the pixel with X and Y coordinates belongs. Let's see how to calculate this address.
+We number the words of the bit-plane starting from 0, as shown in the figure, and we calculate the number of the word that interests us: from this number we will then go back to the actual address.
+Let's start by calculating the number of the first word of row Y, remembering once again that each row is made up of 20 words and that the rows are numbered starting from 0. You can see from the figure that the first word of line 0 (the first line) has number 0, the first word of line 1 (the second line) has number 20, the first word of line 2 has number 40, the first word of line 3 has number 60 and so on.
+In general, therefore, the first word of row Y has the number Y * 20.
+The numbers of the other words in the row are consecutive to that of the first:
+the second word of the row has number Y * 20 + 1, the third word of the row has number Y * 20 + 2 and so on.
+We can call "distance" of a certain word R from the first word of the row to which R belongs, the quantity that must be added to the number of the first word of the row to obtain the number of the word R: in practice, since the second word of the row has the number Y * 20 + 1, we say that it has "distance" 1 from the first word of the row; in the same way the third word of the line, which has number Y * 20 + 2 has distance 2 from the first word of the line, and so on.
+We can also say that the first word of the line has a distance of 0 from itself.
+It is very simple to calculate the distance between the word that contains the pixel of coordinate X and the first word of the row, as we will see with the help of the following figure:
+
+		 ________ ________ ________ ________ _ _ _
+		|        |        |        |        |		
+riga Y		| Y*20+0 | Y*20+1 | Y*20+2 | Y*20+3 |
+		|________|________|________|________|_ _ _
+
+Distanza
+dalla prima 
+word		|   0	 |   1	  |   2    |   3    | -  -
+
+Pixel
+contenuti:	|  0-15  |  16-31 |  32-47 |  48-63 | -  -
+
+			fig. 4	riga di words
+
+The X coordinate of our pixel represents the distance (in pixels) between it and the first pixel of the row. Since each word contains 16 pixels, the first word of a row contains the first 16 pixels of the row, i.e. those that have an X coordinate (= a distance from the edge) from 0 to 15.
+The second word instead contains the pixels whose X coordinate varies from 16 to 31, the third word the pixels with X which varies from 32 to 47 and so on: every 16 pixels we have a word.
+So to calculate the distance between the words, just divide the distance in pixels (i.e. the value of X) by 16. Since we have chosen X as a multiple of 16, the result will be an integer. For example, if X = 32, the distance in words is 32/16 = 2. In fact, as you can see in the figure, pixel 32 of row Y is the first pixel of the second word of the row, whose number is Y * 20 + 1.(edit: should it be third word of the row, whose number is Y * 20 + 2?)
+With the same calculation we see that the pixel which has X = 64 is contained in the word which is 64/16 = 4, word whose number is Y * 20 + 3. This calculation works even if X = 0: in fact we have distance 0/16 = 0 that is the word with number Y * 20 + 0 which is precisely the first word of the line.
+
+In total, then the word containing the pixel X, Y is the word with number N given by the following formula:
+
+	N=(Y*20)+(X/16)
+
+This formula is valid for bit-planes in which a row is made up of 20 words. In general the formula is:
+
+	N=(Y*NUMERO_WORD_CHE_FORMANO_UNA_RIGA)+(X/16)
+
+From the number of the word we can go back to the corresponding address:
+just know the address of the first word of the bit-plane and add the number of the word multiplied by 2 (multiplication is necessary because the address is expressed in bytes and 1 word = 2 byte):
+
+Address of word=(Address of bitplane)+N*2 .
+
+In the example Lezione9b1.s you will find the application of everything we have said. In the example Lesson9b2.s you will see a series of blits in different positions of the screen.
+
+We now begin to deal with images that have a height greater than one line.
+We saw when we talked about the BLTSIZE register, how the blitter considers the data on which it has to operate as "rectangles" of words. This feature is very useful, as it allows you to easily work with rectangular images. For example, suppose you want to copy an image 32 pixels wide and 2 lines high inside a bitplane. This small image will occupy a small portion of the bitplane, highlighted in the figure by the oblique lines.
+
+		 ____ ____ ____ ____ _ _ _ _ _ _ ____
+		|    |    |    |    |		|    |
+		| 0  | 1  |  2 |  3 |	        | 19 |
+		|____|____|____|____|		|____|
+		|    |\\\\|\\\\|    |		|    |
+		| 20 |\21\|\22\| 23 |		| 39 |
+		|____|\\\\|\\\\|____|		|____|
+		|    |\\\\|\\\\|    |		|    |
+		| 40 |\41\|\42\| 43 |		| 59 |
+		|____|\\\\|\\\\|____|		|____|
+		|				     |
+		|				     |
+
+
+		|____ ____ ____ ____		 ____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |		|    |
+		|____|____|____|____|_ _ _ _ _ _|____|
+
+		Fig. 5  A bit-plane with the portion on which we 
+			will blitter highlighted
+
+It is a small rectangle 2 words wide (that is 32 pixels) and 2 lines high. You will immediately understand that to make the copy it is necessary to specify the dimensions of the rectangle in BLTSIZE. But this is not enough. To realize this, let's put ourselves in the blitter's shoes for a moment and try to make the copy ourselves, focusing our attention for the moment only on the writing phase.
+We know (because it is written in BLTDPT) the address of the word at the top left of the rectangle (word 21 in the figure). We also know (written in BLTSIZE) the size of the rectangle to be copied. Molto bene.
+We read the first word and copy it to the address of word 21.
+Now we need to copy the second word of the first line. We know that this word is consecutive to the first word, so we add 2 to the address of the first word (which is written in BLTDPT) and we know the address of the second word to write. We write it and we have finished the first line. Very satisfied we prepare to write the second line. And here we realize that there is a small problem: the first word of the second line IS NOT CONSECUTIVE to the last word of the first line! In fact, as you can see from the figure, the last word of the first line is word 22 while the first of the second line is word 41.
+How do we calculate the address of the first word of the second line?
+The figure shows a 20 word wide bitplane, but it is only an example.
+How does the poor blitter know how many words the bitplane is wide? In fact we could be in the presence of a bitplane wider than the visible screen!
+Indeed, come to think of it who told the blitter that we are using it to copy a rectangle on the screen? What if we were simply copying data to a copperlist? It is evident that the blitter alone does not know how to get out of the way. But there is no problem, we will help him. What the blitter needs to know is simply how to calculate the address of the first word of a line by knowing the address of the last word of the previous line. If you look at the figure for a moment you will be convinced the blitter simply has to "jump" the words from 23 to 40 inclusive. This can be done by adding to the address of word 22 (i.e. the address of the last word of the first line, which the blitter already knows) the number of bytes of difference with respect to word 42 (which is precisely the first word of the new line). This number of bytes, which is called MODULO, is obviously equal to the number of words to be "skipped" multiplied by 2 (since as you well know a word occupies 2 bytes).
+
+
+word		0            X            X+L             H
+riga y 		|------------|*************|--------------|
+riga y+1	|------------|*************|--------------|
+		\____________/\____________/\_____________/
+	 	      |		    |		    |
+	 	 word da	figura 		word da
+		 saltare	larga L		saltare
+				word
+
+		Fig. 6	Modulo
+
+In general, if we have to copy a rectangle wide L words inside a bitmap wide H words, the MODULO expressed in bytes is obtained with the following formula:
+
+MODULO = (H-L)*2
+
+The H-L calculation would give us the modulo expressed in words, multiplication by 2 is used to express it in bytes. In our example the MODULO is (20-2) * 2.
+If you remember we had already encountered the concept of modulo in relation to bit-planes. The blitter modulo works exactly the same way.
+It is possible to assign a different modulo for each DMA channel. In this way the data can be copied and moved between bit planes of different widths.
+The modulo value is written in 4 dedicated registers, one for each DMA channel: BLTAMOD for channel A ($ dff064), BLTBMOD for B ($ dff062),
+BLTCMOD for C ($ dff060), BLTDMOD for D ($ dff066). The modulo values are in bytes, not words. Since the blitter can only operate on words, the least significant bit is ignored, this means that the modulo value must be even.
+The value, positive or negative, is automatically added to the registers pointing to the addresses (BLTxPT) each time the blitter has finished copying a line, in order to calculate the address of the first word of the next line.
+Negative values of the modulo can be useful in many cases, for example to repeat a line by setting the modulo as the bitplane width to negative. We have already seen in lesson 5 how to replicate a line by putting the copper modulo BPL1MOD / BPL2MOD at -40, or in any case -LineLength.
+
+		          ._________
+		          |  _ ____/
+		       ___|______|___
+		     _/              \_
+		     \________________/
+		          \_ Oo _/
+		        /\_(¯¯¯¯)_/\
+		       /    \  /    \
+		     ./ /\   \/   /\ \.))
+		     | |  \__  __/  | |
+		     | |   |    |   | |
+		     | \   |    |   / |
+		   (( \ \__|____|__/ /
+		       \/ _/    \_ \/
+		        \||______||/
+		       /|_|  |   |_|\
+		      / ||   |    || \
+		     ( (¯    |     ¯) )
+		     | |     |      | |
+		     | |     |      | |
+		    _|_|     |      |_|_
+		    \  |     |______|  /
+		     ) |           g| (
+		 ___/  |           ®|  \___
+		/______|           m|______\
+
+At this point we know how to copy a rectangle inside a bitmap.
+Let's summarize all the necessary calculations with an example:
+
+Suppose we want to operate on a section of a 320x200 bitmap, starting at line 13, word 6 (where both are numbered from zero) 5 words wide. First we have to calculate the address of the first word of the rectangle, and then write it in the BLTxPT register of the channel that interests us.
+The calculation is done as follows: we take the address of the first word of the bitplane, add 13 * 20 * 2 bytes to calculate the address of the first byte of line 13 (in fact each line occupies 20 words = 40 bytes) and finally we add 12 bytes (= 6 words) to get to the right horizontal position.
+The width is 5 words (10 bytes). At the end of each line, we need to skip 30 bytes to get to the beginning of the next line, so we use a modulo of 30. In general, the doubled width (in words) plus the modulo value (in bytes) should equal the full width, in bytes, of the bitplane containing the image.
+
+These calculations are illustrated in the figure showing the required values used in the BLTxMOD and BLTxPTR (BLTxPTH and BLTxPTL) blitter registers.
+
+
+   <Mem_Addr> = Indirizzo (0,0)
+	    \
+	     \
+	      \		    NUMERO BYTE (COLONNA)
+	       \
+	        \ 0	    10	      20	30	 39
+		 \|	     |	       |	 |	  |
+		  +----------------------------------------+ - -
+		 0|········································|	|
+		 1|········································|
+		 2|········································|	|
+		 3|········································|
+		 4|········································|	|
+		 5|········································|
+		 6|········································|	|
+		 7|········································|
+		 8|········································|	|
+		 9|········································|
+    NUMERO	10|········································|	|
+    riga	11|········································|
+		12|········································|	|- - finestra
+		13|············##########··················|	     bitmap
+		14|············##########··················|	|
+		15|·salto sin. ##########··· salto dest.···|
+		16|<---------->##########<---------------->|	|
+		17| = 12 bytes ##########··· = 18 bytes ···|
+		18|············##########··················|	|
+		19|·················\······················|
+		20|··················\·····················|	|
+		 -|···················\····················|
+		 -|····················\···················|    |
+		 -|·····················\··················|
+		 -|······················\·················|	|
+		  +-----------------------\------------\---+ - -
+					   \		\
+					    \		 \
+				immagine da manipolare	  \
+							   \
+							 un byte
+
+	BLTxPTR = <Mem_Addr> + (40*13) + 12
+		= <Mem_Addr> + 532
+
+	BLTxMOD = 12 + 18
+		= 30 bytes
+
+		Fig. 7  calcoli per BLTxPTR e BLTxMOD
+
+At this point it is good to take a break and look at some examples.
+
+In lesson9c1.s and lesson9c2.s you will find simple examples of copying rectangular areas. Study them carefully, concentrating on the calculation of the addresses and forms used in the blittings.
+
+In lesson9c3.s there is an example in which a blitt with negative modulo is performed.
+
+In lesson9d1.s and lesson9d2.s you will see the first examples of animation with the blitter.
+
+The idea is very simple, to give the idea of movement it is enough to draw our figure each time in a different position, a bit like we did with sprites.
+Unlike then, however, before drawing the figure in the new position, we will have to delete it from the old one, otherwise we would get a "trail" effect.
+
+In these 2 examples we move the figure down one line from time to time, adding 40 bytes each time to the BLTxPT address.
+
+In lesson9d3.s we apply the same technique to move the figure horizontally. Note, however, that changing the address is equivalent to moving the rectangle to the right (or left) of one or more words. Since a word corresponds to 16 pixels, in this way we can only move the figure horizontally in steps of 16 pixels, which makes, as you can see in the example, the movement not very smooth, and too fast.
+
+	              .       :
+	                      ·
+	              ¦:.:.:.:¦
+	              l______ |
+	              (°X° )  ¯)
+	              |C_¯¯__ T___
+	 ________     l_____¬ l _ \
+	(_____   \________T____/ ) \
+	    (__   ______________/   \
+	     (____/      /\°         \
+	                / /\°         \
+	               / /  \°         \
+	      .·.     / /    \°_________\
+	    .·   ·. _/  \     ¯\ _..  ¬\  xCz
+	  .·       (_   _)      \/·:    \____
+	.·          `-`-'       /·:      \.  \__
+	····.     .·····       /·:        \:. \ \
+	    :     :            \·:.        \::.\ \
+	....:..  .:...........  \·::.       \___\ \
+	                       __\___________\ `-\_)
+	                      (_____________)
+
+So far we have limited ourselves to drawing figures with the leftmost pixel in a position multiple of 16. To have a fluid movement, however, it is necessary to be able to draw the figure in an arbitrary position on the screen.
+Let's take an example, imagine that we have the image of a car that we want to move on the screen.
+By properly calculating the address of the rectangle that contains it, we can "blit" our car starting from any of the words that form the screen. If our car image, for example, has the door 5 pixels from its extreme left, we can move it, together with the car, 5 pixels from the beginning of some word on the screen. If we want to move it to the right, we can "blitt it" starting from the next word.
+The result would be a "click" of 16 pixels each time. But if we want to slide that car to the right or to the left one pixel at a time, or in any case we want to blitt it in a horizontal position that is not a multiple of 16, how do we do it?
+
+We have to make sure that the pixels forming the image are copied NOT starting from the first bit of the first word, but starting from an arbitrary bit inside that word, as shown in the following figure.
+
+		copia con X multiplo di 16
+
+prima word
+sorgente		1 0 0 1 1 0 1 0 1
+
+			| | | | | | | | |
+			| | | | | | | | |
+			v v v v v v v v v
+prima word 		_ _ _ _ _ _ _ _ _ _
+destinazione	       |_|_|_|_|_|_|_|_|_|_
+
+bit			0 1 2 3 4 5 6 7 8 ..
+
+
+		copia con X arbitrario
+
+prima word
+sorgente	 	      1 0 0 1 1 0 1 0 1
+
+			      | | | | | | | | |
+			      | | | | | | | | |
+			      v v v v v v v v v
+prima word 		_ _ _ _ _ _ _ _ _ _
+destinazione	       |_|_|_|_|_|_|_|_|_|_
+
+bit			0 1 2 3 4 5 6 7 8 ..
+
+		Fig. 8  Shift
+
+
+In practice we have to shift the bits that make up the figure from right to left.
+The blitter has hardware shifters for channels A and B, which shift to the right all the bits of the words that are read from channels A and B.
+The bits are shifted by a number of positions which can vary from 0 to 15.
+Shifting 0 positions is equivalent to not shifting at all: all the blittings we have seen (and done) so far were blitted with a 0 position shift.
+The shift value for channel A is assigned with bits 15 to 12 of the BLTCON0 register ($dff040); the shift value of channel B is assigned with bits 15 to 12 of BLTCON1 ($dff042). If you remember - so far we had always left these bits at 0, which indicates a shift of 0 positions.
+Channel C, on the other hand, is a proletarian, it has no shifter.
+(For those who have forgotten it, shifting bits means "scrolling" bits to the right or left ....)
+The shifting operation is performed at the same time as the normal copy and does not affect the speed of the blitter: whatever the shift value, the time taken for the blitt is always the same.
+
+Thanks to the shift, we can draw a figure having the leftmost pixel in an arbitrary X position. In fact, by calculating the address of the destination as usual, we can draw the figure at a multiple X position of 16. By simultaneously activating the shifter, we can move it further to the right to make it reach the desired position.
+For example, suppose you want an X position of 38 pixels.
+By calculating the address we can move the figure 32 pixels (32 is a multiple of 16) to the right of the border, 0 and we can move to the right by another 6 bits (38-32 = 6) by setting a shift of 6.
+In general, if X is not a multiple of 16, doing the integer division X / 16 we get an integer result (which we use to calculate the destination address) and a remainder that tells us how much the shift must be.
+(I remember that the integer division is a division in which the decimal digits of the result are not calculated and a remainder is obtained, as is done in the first grade; for example 7/3 = 2 with the remainder of 1).
+In the case of a horizontal position X = 100, we have 100/16 = 6 with the remainder of 4 (in fact 16 * 6 = 96 and 100-96 = 4); therefore the distance between the first destination word and the first word of the line is equal to 6 words, ie 12 bytes, and the shift value is 4 bits.
+
+Before starting to use the shift, however, we need to understand how it works.
+To begin with, some bits are of course shifted to the right, out of the words they belonged to. From the left something has to be shifted into, to replace the bits that have gone out. What in particular? For the first word of the blittata, they are shifted into zeros; for each subsequent word of the same blitt, the bits shifted inside a word are those shifted out of the previous word. In short, what comes out on one side (the right) falls into the other (left!) in the following word.
+Let's take a small example, helping us with a figure to understand it better.
+Suppose we copy 3 words (they can form a rectangle one line high and 3 words wide, or 3 lines high 1 word wide, it makes no difference from the point of view of the shift), applying a shift value equal to 3.
+Let's see what happens:
+
+SORGENTE
+ word 1			 word 2			 word 3
+1000110001010101	0001001001000110	1010101010101010
+
+DESTINAZIONE
+ word 1			 word 2			 word 3
+0001000110001010	1010001001001000	1101010101010101
+^^^			^^^			^^^
+questi 3 bit sono gli	questi sono i 3 bit	questi sono i 3 bit
+zeri shiftati dentro	shiftati fuori dalla	shiftati fuori dalla
+la prima word		prima word e rientrati	word 2 e rientrati
+			nella seconda word	nella word 3
+
+		Fig. 9  shift
+
+
+Note that the last 3 bits of word 3 of the source are NOT copied ANYWHERE!
+
+For example, let's consider a blitt three words wide and two words high, with a 4-bit shift. For simplicity, let's assume it's a normal copy from A to D.
+The first word that will be written in D is the first word taken from A, shifted to the right by four bits with 4 cleared bits shifted in from the left.
+The second word will be the second word taken from A, shifted to the right, with the four least significant bits (to the right) of the first word shifted in.
+Next, I will write the first word of the second line taken from A, shifted four bits, with the four least significant bits of the last word from the first line shifted in. This will continue until the blitt is over.
+
+In lesson9e1.s you can see an example of the use of the shift, which allows a figure to move one pixel at a time to the right. The result, however, is not very good due to the fact that the bits that are shifted out of one word are shifted into the next word, which is one line below. So the bits that go out to the right fall from the left into the next line! The situation is illustrated by the following figure, assuming a 4-bit shift: 
+
+
+SORGENTE
+word 1		1000001111100000
+  "  2		1100111111111000
+  "  3		1111111111101100
+  "  4		1111111111111110
+  "  5		1100111111111000
+word 6		1000001111100000
+
+
+DESTINAZIONE
+word 1		0000100000111110
+  "  2		0000110011111111
+  "  3		1000111111111110
+  "  4		1100111111111111
+  "  5		1110110011111111
+word 6		1000100000111110
+		^^^^
+		these 4 columns of bits consist of the bits entered from the 
+		left: as you can see (except for the first line) in each line 
+		the bits left by the previous line enter.
+
+		Fig. 10  Shift di un rettangolo
+
+Fortunately, this problem is solved in a very simple way.
+If you think about it, what we would like, is that the bits that come out on the right of a word, re-enter from the left NOT in the next line, but rather IN THE RIGHT-MOST WORD! We must therefore "involve" in the blitt also the words more to the right. This can be done simply by increasing the width of the figure by adding to the right a "column" of words OF ZERO VALUE. In this way, the extra column is invisible, and furthermore the bits shifted out of the words that compose it will all be zeros and therefore will not bother re-entering the words of the following line.
+To clarify this, here's what happens:
+
+SORGENTE
+		word 1		word 2
+riga 1		10000011111000000000000000000000
+  "  2		11001111111110000000000000000000
+  "  3		11111111111011000000000000000000
+  "  4		11111111111111100000000000000000
+  "  5		11001111111110000000000000000000
+  "  6		10000011111000000000000000000000
+				^^^^^^^^^^^^^^^^
+				This is the added words column
+
+DESTINAZIONE
+		word 1		word 2
+riga 1		00001000001111100000000000000000
+  "  2		00001100111111111000000000000000
+  "  3		00001111111111101100000000000000
+  "  4		00001111111111111110000000000000
+  "  5		00001100111111111000000000000000
+  "  6		00001000001111100000000000000000
+		^^^^		^^^^
+		|		These 4 bits have left word 1
+		|		and entered word 2
+		|		
+		These 4 bits have left word 2 of the previous line and 
+		entered word 1 (except those entered in word 1 of line 1, 
+		which are reset automatically)
+
+		Fig. 11  Shift di un rettangolo
+
+In the example lesson9e2.s you will see this technique applied, which allows you to move a figure to the right by a number of pixels between 1 and 15 (in fact the possible shift values range from 0 to 15 inclusive).
+In the example lesson9e3.s we finally see our figure move to the right an arbitrary number of pixels. In practice, the examples lesson9d3.s and lesson9e2.s are combined together.
+
+	                     __---__
+	                  _-       _--______
+	              __--( /     \ )XXXXXXXXXXXXX_
+	            --XXX(   O   O  )XXXXXXXXXXXXXXX-
+	           /XXX(       U     )        XXXXXXX\
+	         /XXXXX(              )--_  XXXXXXXXXXX\
+	        /XXXXX/ (      O     )   XXXXXX   \XXXXX\
+	        XXXXX/   /            XXXXXX   \__ \XXXXX----
+	        XXXXXX__/          XXXXXX         \__-----
+	---___  XXX__/          XXXXXX      \__         ---
+	  --  --__/   ___/\  XXXXXX            /  ___---=
+	    -_    ___/    XXXXXX              '--- XXXXXX
+	      --\/XXX\ XXXXXX                      /XXXXX
+	        \XXXXXXXXX                        /XXXXX/
+	         \XXXXXX                        _/XXXXX/
+	           \XXXXX--__/              __-- XXXX/
+	            --XXXXXXX---------------- XXXXX--
+	               \XXXXXXXXXXXXXXXXXXXXXXXX-
+	                 --XXXXXXXXXXXXXXXXXX-
+
+*******************************************************************************
+*		BLITTATE "A COLORI"					      *
+*******************************************************************************
+
+Up to now we have limited ourselves to considering images formed by a single bitplane, that is to say with only 2 colors. Normally, when working with multi-color images, bit-planes are arranged consecutively in memory, so that immediately after the last word of a bit-plane there is the first word of the next bit-plane.
+The image is then structured as follows:
+
+		 ____ ____ ____ ____ _ _ _ _ _ _ ____
+bitplane 1	|    |    |    |    |		|    |
+		| 0  | 1  |  2 |  3 |	        | 19 |	riga 0 bitplane 1
+		|____|____|____|____|		|____|
+		|    |    |    |    |		|    |
+		| 20 | 21 | 22 | 23 |		| 39 |	riga 1 bitplane 1
+		|____|____|____|____|		|____|
+		|				     |
+		|				     |
+
+
+		|____ ____ ____ ____		 ____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |		|    |	ultima riga bitplane 1
+		|____|____|____|____|_ _ _ _ _ _|____|
+bitplane 2	|    |    |    |    |		|    |
+		| 0  | 1  |  2 |  3 |	        | 19 |	riga 0 bitplane 2
+		|____|____|____|____|		|____|
+		|				     |
+		|				     |
+
+
+		|____ ____ ____ ____		 ____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |		|    |	ultima riga bitplane 2
+		|____|____|____|____|_ _ _ _ _ _|____|
+bitplane 3	|    |    |    |    |		|    |
+		|    |    |    |    |		|    |	riga 0 bitplane 3
+		|____|____|____|____|_ _ _ _ _ _|____|
+		|				     |
+
+
+		|____ ____ ____ ____		 ____|
+		|    |    |    |    |		|    |	ultima riga
+		|    |    |    |    |		|    |	dell'ultimo bitplane
+		|____|____|____|____|_ _ _ _ _ _|____|
+
+		Fig. 12 Memory representation of a multi-bitplane image 
+			(each square is a word)
+
+
+As you already know, a bit-plane H words wide and V lines high, occupies H * V words, that is 2 * H * V bytes (normally H = 20 and V = 256, therefore a bit-plane occupies 40 * 256 bytes ). This means that, since the bit-planes are arranged in memory one after the other, if the bit-plane 1 starts at the address PLANE1, the bit-plane 2 will start at the address PLANE2 = PLANE1 + 2 * H * V.
+Similarly, bit-plane 3 starts at the address PLANE3 = PLANE2 + 2 * H * V and so on. The same formula applies to determine the address of a word of the second bit-plane knowing the address of the corresponding word of the first bit-plane: for example the seventh word of the first bit-plane has the address ADDRESS1 = PLANE1 + 2 * 7, while the seventh word of the second bit-plane has the address ADDRESS2 = PLANE2 + 2 * 7 = PLANE1 + 2 * H * V + 2 * 7 . But since PLANE1 + 2 * 7 = ADDRESS1, we have the following formula:
+
+ADDRESS2 = ADDRESS1+2*H*V.
+
+This formula will be very useful to us shortly. A rectangular image contained in a screen with N bitplanes will be made up of N rectangles, one per bitplane. So, to manipulate it with the blitter, just perform a blitt for each bit-plane. In the figure below you can see a screen with 3 bitplanes, with an image 3 lines high highlighted.
+In memory, the lines of each bitplane constitute a different rectangle of words (we have indicated in each line of the image the bitplane to which it belongs). As you can see, the lines of each bitplane are close to each other and far from the lines of the other planes, therefore they must be manipulated with different blits.
+
+		  +----------------------------------------+
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |············#####1####··················|
+		  |············#####1####··················|
+		  |············#####1####··················|
+		  |········································|
+
+		  |········································|
+		  +----------------------------------------+
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |············#####2####··················|
+		  |············#####2####··················|
+		  |············#####2####··················|
+		  |········································|
+
+		  |········································|
+		  +----------------------------------------+
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |············#####3####··················|
+		  |············#####3####··················|
+		  |············#####3####··················|
+		  |········································|
+
+		  |········································|
+		  +----------------------------------------+ 
+
+		Fig. 13	 Screen with an image highlighted.
+
+For example, if we have a figure to draw on the screen, first we blitt the first plane of the figure in the first plane of the screen, then the second plane of the figure in the second plane of the screen, then we do the same with the third plane and so on with the others. Usually then you do a blitt loop, like the following:
+
+	move.w	#NUMEROPLANES-1,d1	; loop counter
+LOOP:
+waitblit:			; wait for the blitter to finish
+	btst	#6,2(a5)	; the previous blitt
+	bne.s	waitblit
+
+	move.l	#$09f00000,$40(a5)	; bltcon0 e BLTCON1 - copia da A a D
+
+;	load the other registers of the blitter
+
+;	starts the blitt
+
+	dbra	d1,LOOP		; do the loop
+
+The values to be loaded into the blitter registers are always the same at each blittata, except obviously for what concerns the BLTxPT registers, because the addresses of the various bit-planes are different. At this point the formula we have seen comes into play. By means of this formula, in fact, knowing the addresses to be written in the BLTxPT registers for the first blitt (i.e. for the blitt relative to the first bit-plane), we are able to calculate the addresses to be written in the BLTxPT registers for the subsequent blits (i.e. relating to subsequent bit-planes). It is sufficient to put in a variable the address relative to the first bit-plane, and to add to this address 2 * H * V at each loop.
+
+In the example lesson9f1.s you can see this technique applied. However, loops of this type are not always used.
+
+Negli esempi lezione9f2.s e lezione9f3.s ci sono altri esempi di blittate
+"a colori".
+
+Esiste pero` un'altro modo di disporre in memoria i bitplane, che ci consente
+di blittare in un colpo solo tutti i bitplanes di un'immagine, chiamato
+"INTERLEAVED BITMAP" ovvero "bitmap" interlacciata. Come suggerito dal nome,
+questa tecnica consiste nel "mischiare" tra loro le righe dei vari planes.
+Invece di mettere prima tutte le righe del primo plane, poi quelle del secondo
+e cosi` via, mettamo prima la riga 0 (la prima) del primo bitplane, poi la
+riga 0 del secondo bitplane e poi in ordine le righe 0 degli altri planes;
+dopo le righe 0 di tutti i planes, mettiamo la riga 1 del primo plane, poi la
+riga 1 del secondo, e poi tutte le righe 1 degli altri planes; poi continuiamo
+cosi` con le altre righe. Per capirlo bene guardate la figura seguente e
+confrontatela con la figura 12 dove e` illustrata la disposizione normale
+dei bit-planes.
+
+
+		 ____ ____ ____ ____ _ _ _ _ _ _ ____
+		|    |    |    |    |		|    |
+		| 0  | 1  |  2 |  3 |	        | 19 |	riga 0 bitplane 1
+		|____|____|____|____|		|____|
+		|    |    |    |    |		|    |
+		| 20 | 21 | 22 | 23 |		| 39 |	riga 0 bitplane 2
+		|____|____|____|____|		|____|
+		|				     |
+		|				     |
+
+
+		|____ ____ ____ ____		 ____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |		|    |	riga 0 ultimo bitplane
+		|____|____|____|____|_ _ _ _ _ _|____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |	        |    |	riga 1 bitplane 1
+		|____|____|____|____|		|____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |	        |    |	riga 1 bitplane 2
+		|____|____|____|____|		|____|
+		|				     |
+		|				     |
+
+
+		|____ ____ ____ ____		 ____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |		|    |	riga 1 ultimo bitplane
+		|____|____|____|____|_ _ _ _ _ _|____|
+		|				     |
+		|				     |
+
+
+		|____ ____ ____ ____		 ____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |		|    |	ultima riga bitplane 1
+		|____|____|____|____|_ _ _ _ _ _|____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |	        |    |	ultima riga bitplane 2
+		|____|____|____|____|		|____|
+		|				     |
+
+
+		|____ ____ ____ ____		 ____|
+		|    |    |    |    |		|    |	ultima riga
+		|    |    |    |    |		|    |	dell'ultimo bitplane
+		|____|____|____|____|_ _ _ _ _ _|____|
+
+		Fig. 14  Rappresentazione in memoria di un'immagine
+			 a piu` bitplane (ogni quadrato e` una word)
+			 con la tecnica INTERLEAVED (o RAWBLIT).
+
+Innanzitutto vediamo come si possono visualizzare immagini in questo formato,
+lasciando da parte un'attimo il blitter. La quantita` di words che compongono
+le righe e` sempre la stessa. Quello che cambia e` la disposizione relativa
+delle righe. Cio` per noi comporta 2 modifiche alla procedura che usiamo
+di solito per visualizzare i bitplanes. La prima riguarda il modo in cui
+calcoliamo gli indirizzi da mettere nei registri BPLxPT.
+Normalmente, per puntare i bitplane nela copper list, calcoliamo gli indirizzi
+dei bitplane successivi al primo, a partire dall'indirizzo del primo,
+aggiungendo ad esso ogni volta il numero di bytes occupati da una riga,
+moltiplicato per il numero di righe che formano il bitplane.
+Questo perche` la prima riga di un bitplane e` memorizzata dopo l'ultima del
+bit-plane precedente, e quindi "dista" dalla prima riga del bit-plane
+precedente un numero di righe pari all'altezza del bitplane stesso.
+Con la disposizione interleaved, invece, la riga o di un bitplane e`
+memorizzata subito dopo la riga 0 del bitplane che lo precede.
+Questo vuol dire che nel loop che calcola gli indirizzi dei bitplane dovremo
+aggiungere ogni volta all'indirizzo di un bitplane semplicemente il numero di
+bytes occupati da UNA riga, per ottenere l'indirizzo del bitplane seguente.
+Dobbiamo osservare inoltre che, a differenza del caso normale, le righe che
+formano un bitplane NON sono disposte consecutivamente in memoria.
+Infatti, tra la riga Y e la riga Y+1 ci sono le righe degli altri bitplane.
+Cio` significa che il puntatore al bitplane, ogni volta che arriva alla fine di
+una riga, deve "saltare" le righe degli altri bitplanes, per andare a puntare
+l'inizio della prossima riga.
+Come avrete gia` intuito, per farlo saltare dobbiamo utilizzare il modulo.
+Vi ricordo infatti che anche i bitplanes hanno i loro moduli, contenuti nei
+registri BPLxMOD (dove x=1 per i bitplanes dispari e x=2 per i pari).
+Con la disposizione normale dei bitplanes, siccome subito dopo la fine di una
+riga inizia la riga successiva, mettiamo il modulo a 0 (a meno che non vogliamo
+fare l'effetto flood o abbiamo un'immagine piu` grande dello schermo).
+Vediamo invece il valore da mettere con la disposizione interleaved.
+Indichiamo con N il numero di bitplane che usiamo.
+Consideriamo il bitplane 1: all'inizio della riga Y il registro BPLPT1 punta
+alla prima word della riga Y del bitplane 1.
+Mentre la riga Y viene visualizzata sul monitor, il registro BPLPT1 si
+sposta puntando le words seguenti.
+Alla fine della riga Y, BPLPT1 punta alla prima word della riga Y del
+bitplane2.
+A questo punto gli viene sommato il modulo.
+Noi vogliamo che BPLPT1 vada a puntare la prima word della riga Y+1 del
+bitplane 1.
+Dobbiamo quindi far saltare al puntatore le righe 2,3,ecc. fino a N.
+In totale si tratta di N-1 righe (per esempio se abbiamo 4 bitplane, dobbiamo
+saltare la riga Y dei bitplanes 2, 3 e 4, cioe` 3 righe).
+Quindi se una riga occupa L words, ovvero 2*L bytes, il valore corretto del
+modulo e` 2*L*(N-1).
+
+		 ____ ____ ____ ____ _ _ _ _ _ _ ____
+		|    |    |    |    |		|    |
+		|    |    |    |    |	        |    |	riga Y bitplane 1
+		|____|____|____|____|		|____|
+	/	|    |    |    |    |		|    |
+	|	|    |    |    |    |		|    |	riga Y bitplane 2
+	|	|____|____|____|____|		|____|
+	|	|				     |
+	|	|				     |
+	|
+	|
+ dobbiamo saltare
+ queste N-1 righe
+	|
+	|
+	|	|____ ____ ____ ____		 ____|
+	|	|    |    |    |    |		|    |
+	|	|    |    |    |    |		|    |	riga Y bitplane N
+	\	|____|____|____|____|_ _ _ _ _ _|____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |	        |    |	riga Y+1 bitplane 1
+		|____|____|____|____|		|____|
+
+		Fig. 15 Valore del modulo con la tecnica INTERLEAVED.
+
+
+Naturalmente tutte le immagni che voliamo visualizzare sullo schermo dovranno 
+avere i bitplane disposti nel formato interleaved. Se un immagine e` definita
+direttamente nel nostro sorgente (tramite delle DC.w ...) , dobbiamo disporre
+le righe come previsto dal formato. Se invece vogliamo tenere l'immagine in un
+file esterno da includere con la direttiva INCBIN, dobbiamo convertirla NON
+in formato RAW (che e` il formato normale) ma in formato interleaved. Tutti
+i programmi di conversione supportano questo formato, anche se molti lo
+chiamano con altri nomi. In particolare il KEFRENS CONVERTER che abbiamo usato
+nel corso, chiama questo formato "RAW-BLIT". Altri converter lo chiamano
+"RASTER MODULO". Fate quindi attenzione a convertire l'immagine nel giusto
+formato, altrimenti non vedrete nulla e passerete ore a cercare nel vostro
+programma un BUG inesistente !
+
+In lezione9g1.s vedete un esempio di visualizzazione di una bitmap interleaved.
+		               ___
+		             _/   ¬\
+		            /      .¬\
+		           /._/\\_\ \ \
+		          (( _/\__\\ \<
+		          /\/__.  \_.  \
+		         <__ \ø\\__Y\\  \
+		      ____<   ¯¯___///  /
+		     /ø   Y       .//  /
+		    //    |_  ÷---|` ./
+		   /`      /\__  ^/\ |
+		  /.    .  [_  \_/  \|
+		.//   _/     \_/ ~\  
+		|(    |        ,   \
+		|?    | (   . /    ))
+		|·    | ø    Y    //  _
+		|  _  | ?    |   / \ (%)
+		| |_| | |    ?  ` /"XI_I_ 
+		?_| |_? ?    ·\  ` [____¬\
+		/?? ??\ ·      \_  [____ (
+		)     ( ._   _.  \_[_____/
+		\_____/   \_/      |÷aXe÷|
+		                   X_____X
+
+Vediamo ora perche` questo formato e` conveniente nell'uso del blitter.
+Nella figura seguente, viene mostrato uno schermo interleaved con evidenziata
+al suo interno un'area rettangolare. Come potete vedere, le righe che formano
+i vari bitplanes sono "mischiate" tra loro, e formano un'unico rettangolo in
+memoria (abbiamo indicato in ogni riga dell'immagine il bitplane a cui essa
+appartiene). Confrontate questa figura con la figura 13 che mostrava una
+situazione analoga in uno schermo "normale". Nel caso normale, le righe degli N
+bitplanes dell'immagine, formano N distinti rettangoli di words, ognuno alto
+tante righe quante sono le righe dell'immagine. Nel caso interleaved invece,
+le righe degli N bitplanes, mischiandosi, formano un unico rettangolo di word.
+Notate che questo rettangolo ha altezza pari all'altezza dell'immagine
+moltiplicata per il numero di bitplanes che la formano. Nella figura
+abbiamo infatti un'immagine di 3 bitplanes alta 3 linee.
+Il rettangolo di words ha 9 righe.
+
+		  +----------------------------------------+
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |········································|
+		  |············#####1####··················|
+		  |············#####2####··················|
+		  |············#####3####··················|
+		  |············#####1####··················|
+		  |············#####2####··················|
+		  |············#####3####··················|
+		  |············#####1####··················|
+		  |············#####2####··················|
+		  |············#####3####··················|
+		  |········································|
+
+		  |········································|
+		  |········································|
+		  |········································|
+		  +----------------------------------------+
+
+		Fig. 16	 Schermo INTERLEAVED con evidenziata un'immagine.
+
+Il fatto che nel formato interleaved le righe dei bitplanes di un'immagine
+formino un unico rettangolo in memoria, e` molto importante perche` ci consente
+di operare sull'immagine mediante una sola blittata. Naturalmente, questa
+blittata e` diversa dalle blittate che facciamo nel caso normale.
+Innanzitutto, e` diversa la dimensione della blittata.
+Infatti nel caso normale ogni blittata ha altezza pari all'altezza
+dell'immagine, mentre nel caso interleaved il rettangolo di words ha
+un'altezza pari all'altezza dell'immagine moltiplicata per il numero di
+bitplanes che la formano, e quindi tale deve essere l'altezza della nostra
+blittata.
+In secondo luogo, e` diverso il modo in cui calcoliamo gli indirizzi delle
+blittate, in particolare dobbiamo cambiare il modo di calcolare l'indirizzo
+della prima word di una riga.
+Nel caso normale, abbiamo visto che se il rettangolo da blittare inizia alla
+riga Y, la "distanza" (offset) della prima word della riga Y dall'inizio
+del bitplane e` pari a Y*(NUMERO DI BYTES OCCUPATI DA UNA RIGA).
+E questo e` logico, perche` in uno schermo normale le righe di un bitplane
+sono consecutive in memoria.
+In uno schermo INTERLEAVED, invece, le cose sono diverse perche` le righe di
+un bitplane non sono consecutive.
+Infatti, come sapete, dopo la riga Y del primo bitplane, ci sono le righe Y
+degli altri bitplane, e dopo di esse la riga Y+1 del primo bitplane.
+Quindi, la distanza tra la prima word della riga Y del primo bitplane e la
+prima word della riga Y+1 del primo bitplane, e` uguale al numero di bytes
+occupati dalle righe Y di tutti i bitplane della figura.
+Con lo stesso ragionamento capite facilmente che la distanza tra la prima word
+della riga Y del primo bitplane e l'inizio dello schermo e` pari a:
+
+	Y*(NUMERO_DI_BYTES_OCCUPATI_DA_UNA_RIGA)*(NUMERO_DI_PLANES)
+
+In conclusione, quindi, il calcolo dell'indirizzo per blittare un rettangolo
+che inizia alle coordinate X e Y per uno schermo INTERLEAVED diventa:
+
+Indirizzo_word = (Indirizzo_bitplane)+N*2
+
+con:
+	N=(Y*(NUMERO_WORD_CHE_FORMANO_UNA_RIGA)*(NUMERO_PLANES))+(X/16).
+
+Fare una sola blittata invece che tante, oltre a rendere piu` semplice il
+programma, lo rende anche piu` veloce.
+Si badi bene che il tempo impiegato dal blitter e` (piu` o meno) lo stesso,
+in quanto e` vero che facciamo una sola blittata, ma essa ha altezza pari alla
+somma delle altezze delle blittate del caso normale, e quindi richiede lo
+stesso tempo, perche` la velocita` del blitter e` determinata in sostanza dal
+numero di words che esso deve manipolare, e cioe` dalla dimensione della
+blittata.
+Fare una sola blittata, pero`, avvantaggia notevolmente il processore, come
+potete capire dal seguente schema, che confronta le operazioni da effettuare
+nei 2 casi (schermo formato da 3 bitplanes):
+
+	SCHERMO NORMALE				SCHERMO INTERLEAVED
+
+1)	attendi la fine				attendi la fine
+	della (eventuale) blittata		della (eventuale) blittata
+	precedente				precedente
+
+2)	carica i registri del			carica i registri del
+	blitter per la prima			blitter per la prima
+	blittata				e unica blittata
+
+3)	attendi la fine
+	della prima blittata
+
+4)	carica i registri del
+	blitter per la seconda
+	blittata
+
+5)	attendi la fine
+	della seconda blittata
+
+6)	carica i registri del
+	blitter per la terza
+	blittata
+
+
+Come vedete, nel caso di schermo interleaved, il processore deve fare meno
+operazioni, e sopratutto deve attendere una sola volta che il blitter finisca,
+mentre nel caso di schermo normale deve attendere un numero di volte pari
+al numero dei bitplanes. Poiche` durante un attesa il processore non fa nulla
+di utile e non ha bisogno di riposo, e` opportuno farlo lavorare il piu`
+possibile diminuendo il numero di attese.
+
+L'esempio lezione9g2.s e` la versione INTERLEAVED dell'esempio lezione9f1.s.
+Guardateli insieme, notando le differenze che essi presentano.
+
+L'esempio lezione9g3.s, invece, e` la versione INTERLEAVED dell'esempio
+lezione9f3.s. Confrontate anche questi.
+					               ........
+					           .::::::::::::::.
+					          ::::::::::::::::::
+					         :::       :::::::::.
+					        :::          ::::::::
+					       ::(__   ___    ::::::::
+					       .::/_)  /__,  :/_\::::.
+					      .:::o/    o   .: //::::::
+					       .::/        .::./::::::
+					       ::(__  )   .::  ::::::
+					       .::/()    .::   ::::::'
+	 _n_____________n__                      (___           ::::
+	|-----------\\\--__F                       \ ~           |
+	|_____________ (O_.\________      __________\___.      ./X\
+	         \(__D)__\   \\     ~~~~~~             \______/.xST\
+	          `-(___O)|_  ||        .                         XX|
+	            (___O) \_//          :          .:    .        ×|
+	              (__O)///__________ //________.:     :        .|
+	                                ~~~        :      :         :
+	                                           .      .         .
+
+*******************************************************************************
+*				MASCHERE				      *
+*******************************************************************************
+
+Il blitter ha la possibilità di mascherare la prima e l'ultima word di ogni
+riga che passa attraverso il canale A. Mascherare vuol dire leggere solo
+alcuni bit di tali word e ignorare gli altri. Questa operazione viene
+effettuata grazie a due registri, che finora avevamo usato senza spiegarne il
+significato. Questi due registri sono chiamati BLTAFWM ($dff044) e BLTALWM
+($dff046), e servono rispettivamente per mascherare la prima e l'ultima word
+di ogni riga letta attraverso il canale A. Ogniuno di essi contiene una word,
+detta maschera. Il blitter quando legge la prima o l'ultima word di una riga
+esegue un'operazioine logica di AND tra la word letta e la maschera
+corrispondente. I bit della word letta dal canale A in corrispondenza dei
+quali c'e` un bit settato a 0 nella maschera verranno cancellati.
+Vediamo qualche esempio:
+
+word letta dal
+canale A	%1001101100010111
+
+maschera	%1111111100000000
+_________________________________
+
+risultato	%1001101100000000
+
+in questo modo abbiamo selezionato solo gli 8 bit piu` a destra della word.
+
+word letta dal
+canale A	%1001101100010111
+
+maschera	%1111110000111111
+_________________________________
+
+risultato	%1001100000010111
+
+in questo modo abbiamo azzerato i 4 bit al centro della maschera.
+Se azzeriamo completamente la maschera, cancelliamo tutta la word:
+
+word letta dal
+canale A	%1001101100010111
+
+maschera	%0000000000000000
+_________________________________
+
+risultato	%0000000000000000
+
+Se invece poniamo la maschera al valore $ffff=%1111111111111111=-1 la maschera
+non cancella nulla, ovvero "fa passare" tutta la word:
+
+word letta dal
+canale A	%1001101100010111
+
+maschera	%1111111111111111
+_________________________________
+
+risultato	%1001101100010111
+
+In tutti gli esempi che abbiamo visto finora non abbiamo avuto bisogno di
+mascherare nulla e infatti abbiamo inizializzato entrambe le maschere al
+valore $ffff.
+
+La prima word di ogni riga (cioe` la word piu` a sinistra) è "ANDizzata" con
+BLTAFWM, e l'ultima word (la word piu` a destra) è "ANDizzata" con BLTALWM.
+Potete facilmente ricordarlo perche` la F nel nome BLTAFWM indica "First"
+che come tutti sanno significa "prima" e la L in BLTALWM indica "Last",
+cioe` ultima. Naturalmente le 2 maschere possono essere diverse tra loro
+(senno` a che ci servirebbero 2 registri?). Se la larghezza della riga è una
+singola word, entrambe le maschere vengono applicate simultaneamente alla
+stessa word. Poiche` i 2 registri BLTAFWM e BLTALWM hanno indirizzi consecutivi
+e` possibile inizializzarli con una sola istruzione MOVE.L #maschera,$dff044.
+E` importante notare che le maschere vengono applicate ai dati PRIMA di 
+eseguire lo SHIFT. I canali B e C non hanno invece la possibilita` di
+mascherare le words lette.
+
+Nell'esempio lezione9h1.s mostriamo l'effetto delle maschere con semplici
+operazioni di copia.
+
+In lezione9h2.s abbiamo una dimostrazione dell'utilita` delle maschere
+nell'"estrarre" da un'immagine solo la parte che ci interessa.
+
+In lezione9h3.s e lezione9h4.s presentiamo 2 nuovi effetti realizzati con
+l'ausilio delle maschere.
+
+Gli esempi lezione9h2r.s, lezione9h3r.s e lezione9h4r.s sono le versioni in
+formato rawblit (interleaved) di lezione9h1.s lezione9h2.s e lezione9h3.s.
+Fate un confronto incrociato, notando tutte le differenze che ci sono
+(in particolare notate che tutte le routines in versione interleaved non hanno
+la necessita` di fare un loop per blittare su ogni plane, e pertanto hanno una
+struttura molto piu` semplice).
+
+Dopo aver visto i nuovi effetti, torniamo ad occuparci di uno vecchio, cioe`
+del pesce che nuota sullo schermo, per scoprire che, con le nostre nuove
+conoscenze sul blitter, possiamo realizzare un'importante miglioria. 
+Abbiamo visto, infatti che per shiftare correttamente una figura, e` necessario
+aggiungere a destra della figura una "colonna" di word azzerate. Questo fatto
+ci costringe a sprecare piu` memoria del necessario per memorizzare le figure.
+Ma ora, grazie alle maschere, possiamo evitare questo spreco.
+Per shiftare e` necessario che l'ultima word di ogni riga della figura sia
+azzerata.
+Invece di leggere direttamente dalla memoria una word azzerata, possiamo
+leggere una word di qualsiasi valore e azzerarla tramite le maschera.
+Siccome il mascheramento viene effettuato PRIMA dello shift, al circuito di
+shift arrivera` comunque l'ultima word di ogni riga azzerata, e tutto si
+svolgera` come se la word azzerata fosse stata letta dalla memoria.
+Visto che non ha importanza il valore dell'ultima word della riga, possiamo
+leggere una word di qualsiasi valore.
+
+Proviamo allora a fare il seguente giochino: non aggiungiamo nessuna word a
+destra dell'immagine, ma senza dirlo al blitter, cioe` settiamo la larghezza
+della blittata come se ci fosse una word in piu` a destra della figura. 
+Il blitter, quindi, dopo aver letto l'ultima word di una riga, pensera` di
+dover leggere ancora una word, e pertanto leggera` la word successiva a
+l'ultima della riga. Che cos'e` questa word? Se usiamo un immagine in formato
+normale, sara` la prima word della riga successiva dello stesso bitplane,
+mentre se l'immagine e` in formato interleaved sara` la prima word di una
+riga di un altro bitplane. In ogni caso sara` comunque una word non nulla, ma
+per noi non c'e` problema perche` la possiamo azzerare con la maschera.
+A questo punto abbiamo solo un problemino: siccome abbiamo letto una word di
+troppo, il puntatore della sorgente si e` spostato in avanti di una word,
+pertanto quando iniziera` a leggere la prossima riga partira` dalla seconda
+word invece che dalla prima. Come si puo` far tornare indietro il puntatore?
+Naturalmente con il vecchio trucco del modulo negativo! Settando il modulo
+della sorgente a -2 (il modulo si esprime in bytes) il blitter si riposiziona
+sulla prima word della riga seguente. Riassumiamo tutto tornando all'esempio
+del pesce che abbiamo usato per illustrare lo shift. Abbiamo dunque un'immagine
+di un solo bitplane, larga 1 word e alta 6 righe. Come abbiamo detto, NON
+aggiungiamo la colonna di word sulla destra.
+
+SORGENTE
+		word 1		
+riga 1		1000001111100000
+  "  2		1100111111111000
+  "  3		1111111111101100
+  "  4		1111111111111110
+  "  5		1100111111111000
+  "  6		1000001111100000
+				
+		Fig. 17 NON aggiungiamo nessuna colonna di words
+
+Tuttavia, facciamo finta che la colonna in piu` ci sia, e quindi blittiamo
+un rettangolo largo 2 words e alto 6 righe. Il blitter legge quindi 2 words
+per ogni riga, prendendo come seconda word la prima word della riga successiva.
+Vediamo in particolare, con l'aiuto della figura seguente, cosa accade durante
+la lettura della prima riga:
+
+SORGENTE
+		word 1		
+riga 1		1000001111100000--------
+  "  2		1100111111111000--------+-----------------------
+  "  3		1111111111101100	|			|
+  "  4		1111111111111110	|			|
+  "  5		1100111111111000	|			|
+  "  6		1000001111100000	|			|
+					|			|
+					V			V
+WORDS LETTE				
+DAL CANALE A			1000001111100000	1100111111111000
+					|			|
+					|			|
+					V			V
+L'ULTIMA WORD DELLA
+RIGA VIENE MASCHERATA		1000001111100000	0000000000000000
+					|			|
+					|			|
+					V			V
+
+SHIFT (2 pixel)			0010000011111000	0000000000000000
+					|			|
+					|			|
+					V			V
+
+				Scritta al canale D	Scritta al canale D
+
+		Fig. 18	 Shift con azzeramento dell'ultima word.
+
+
+Come vedete la seconda word letta viene azzerata prima di essere shiftata.
+Dopo lo shift le 2 word vengono scritte attraverso il canale D.
+Nel frattempo il puntatore al canale A si e` spostato in avanti di 2 words,
+e punta cioe` alla prima word della terza riga. Noi invece dobbiamo farlo
+puntare alla prima word della seconda riga, cioe` dobbiamo farlo tornare
+indietro di una word. Usiamo quindi un modulo pari a -2. Gli spostamenti
+del puntatore sono illustrati dalla figura seguente:
+
+	SORGENTE		WORD PUNTATA	WORD PUNTATA	WORD PUNTATA
+				ALL'INIZIO	DOPO LA PRIMA	AGGIUNGENDO
+				     |		RIGA		IL MODULO
+	1000001111100000	<----		    |		   |
+	1100111111111000	<-------------------+--------------
+	1111111111101100	<-------------------
+	1111111111111110
+	1100111111111000
+	1000001111100000
+
+		Fig. 19	 Movimento del puntatore alla sorgente.
+
+Per vedere il nostro pesce in azione consultate l'esempio lezione9i1.s.
+
+Ormai sappiamo muovere molto bene delle figure sullo schermo usando il blitter.
+Queste figure vengono chiamate BOB che e` un abbreviazione del termine
+inglese "Blitter OBject", ovvero oggetti creati dal blitter.
+Con i BOB Possiamo fare le stesse cose che sappiamo fare con gli sprites
+hardware. I BOB sono piu` lenti degli sprites, perche` il blitter impiega
+comunque un certo tempo per copiare dati. Per contro, pero` i BOBS non soffrono
+delle limitazioni degli sprites riguardo a dimensione, colori e numero massimo.
+Infatti un BOB puo` essere grande quanto vogliamo noi (e` ovvio pero` che al
+crescere delle dimensioni cresce la quantita` di memoria occupata, e di
+conseguenza il tempo necesario al blitter per spostarlo), e puo` avere
+un numero di colori pari a quello dello schermo.
+Inoltre non c'e` nessun limite per quanto rigurda il numero di bob
+contemporaneamente sullo schermo (ovviamente pero`, piu` bob ci sono, piu`
+tempo perdiamo per disegnarli).
+"Che bello", direte voi, "possiamo iniziare a fare un gioco!". Un attimo, non
+esaltiamoci troppo. Siamo proprio sicuri di saper fare con i BOB le stesse cose
+che possimo fare con gli sprites?
+
+Guardiamo lezione9i2.s e il suo "gemello" in formato interleaved lezione9i2r.s.
+
+Abbiamo un BOB colorato che spostiamo liberamente con il mouse sullo schermo.
+Pero` c'e` un problema... muovendo il BOB cancelliamo lo sfondo!
+Questo con gli sprite non accade, in quanto gli sprite sono dei piccoli
+bitplanes separati dai bitplanes dello sfondo.
+I BOB invece vengono disegnati proprio sui bitplane dell'immagine di sfondo,
+quindi in parte la sovrascrivono.
+
+Una prima soluzione al problema la presentiamo negli esempi lezione9i3.s e
+lezione9i3r.s (naturalmente il secondo e` la versione rawblit del primo).
+
+Come vedrete, pero` non e` ancora soddisfacente.
+
+Nell'esempio lezione9i4.s proviamo un'altra soluzione, ma anch'essa presenta
+problemi.
+
+Nell'esempio lezione9i5.s, invece vediamo un esempio di bob mosso dal joystick
+che esce parzialmente dallo schermo.
+
+Abbiamo iniziato a conoscere i BOB, ma per ora non abbiamo raggiunto un
+risultato soddisfacente, cioe` riuscire a fare con i BOB le operazioni tipiche
+videogiochi a causa del problema dello sfondo. Purtroppo con quello che
+sappiamo finora non si puo` fare di meglio.
+
+Ma non preoccupatevi: ci sono ancora molte cose da imparare sul blitter, e
+una di queste ci aiutera` a risolvere il problema!
+Forza e coraggio dunque, la strada e` ancora lunga!
+			 .
+			  )                       \\\..
+			(                       __/ __ \
+			 )                      (.__.)  O
+			(  n_______n            /(__,    \
+			  |________ }__________/ ____,    )__
+			       ((O) \\.       (__________/   \
+			        =(_O) |          /(    )\     \
+			          (_O)|_______   \_\  /_/  \   )
+			                      \    \)(/     | /
+			                       )   /. \     |/
+			                       |  / .  \    |
+			                       | (__.___)   |
+			                       |_|==()==|___|
+			                        |   _      |
+			                        |   |      |
+			                        |   |      |
+ 
+*******************************************************************************
+*		COPIA DI ZONE DI MEMORIA SOVRAPPOSTE			      *
+*******************************************************************************
+
+Illustreremo ora un'altra caratteristica del blitter prendendo spunto dalla
+copia di rettangoli, operazione che ormai conosciamo bene. Cosa succede se
+la sorgente e la destinazione della blittata sono sovrapposte, ovvero sono
+2 rettangoli di word che hanno delle parti in comune? E` ovvio che la blittata
+modifichera` tutta la destinazione, comprese quindi le parti in comune con la
+sorgente.
+La copia tra zone sovrapposte consiste quindi nel mettere il contenuto della
+sorgente PRIMA della copia nella destinazione.
+Dopo la copia, il contenuto della sorgente sara` cambiato.
+Pertanto, dopo la copia, la destinazione NON sara` uguale alla sorgente!!
+Piuttosto, ripetiamo, essa sara` uguale a come era la sorgente PRIMA della
+copia!
+Insomma immaginate che la destinazione sia una fotografia scattata alla
+sorgente, e che durante il tempo impiegato dal fotografo per sviluppare la
+foto, la sorgente sia invecchiata rapidamente tanto da apparire molto diversa
+da come appare nella foto.
+E` sempre effettuare una copia in tali condizioni?
+Dobbiamo studiare bene il problema.
+Vediamo cosa succede con un esempio di una copia di un rettangolo alto 2
+righe e largo 3 words.
+Supponiamo che la sorgente si trovi piu` in basso della destinazione, come
+illustrato dalla figura seguente:
+
+		 ____ ____ ____ ____ ____ ____
+		|    |\\\\|\\\\|\\\\|    |    |
+		|    |\\\\|\\\\|\\\\|    |    |
+		|____|\\\\|\\\\|\\\\|____|____|		rett. SORGENTE=////
+		|    |\\\\|XXXX|XXXX|////|    |
+		|    |\\\\|XXXX|XXXX|////|    |		rett. DESTINAZIONE=\\\\
+		|____|\\\\|XXXX|XXXX|////|____|
+		|    |    |////|////|////|    |		rett. IN COMUNE=XXXX
+		|    |    |////|////|////|    |
+		|____|____|////|////|////|____|
+		|    |    |    |    |    |    |
+		|    |    |    |    |    |    |
+		|____|____|____|____|____|____|
+
+
+		Fig. 20	 Blittata tra rettangoli sovrapposti
+
+Analizziamo, con l'aiuto di una serie di figure, le successive fasi
+dell'operazione. Indichiamo con le lettere A,B,C,D,E,F il contenuto delle 6
+words che vogliamo copiare, e con il simbolo "?" il contenuto delle word che
+non ci interessano, e che quindi possiamo anche cancellare.
+Prima di iniziare la copia, abbiamo questa situazione:
+
+		 ____ ____ ____ ____ ____ ____
+		|    |\\\\|\\\\|\\\\|    |    |
+		|    |  ? |  ? |  ? |    |    |
+		|____|\\\\|\\\\|\\\\|____|____|		rett. SORGENTE=////
+		|    |\\\\|XXXX|XXXX|////|    |
+		|    |  ? |  A |  B |  C |    |		rett. DESTINAZIONE=\\\\
+		|____|\\\\|XXXX|XXXX|////|____|
+		|    |    |////|////|////|    |		rett. IN COMUNE=XXXX
+		|    |    |  D |  E |  F |    |
+		|____|____|////|////|////|____|
+
+
+		Fig. 21a Blittata tra rettangoli sovrapposti
+
+Come sappiamo il blitter copia le words una alla volta partendo da quella piu`
+in alto a sinistra e proseguendo verso il basso e verso destra. La prima riga
+viene letta e copiata su una zona della destinazione non in comune, e che
+quindi possiamo sovrascrivere tranquillamente. Ecco la situazione dopo la copia
+della prima riga:
+
+		 ____ ____ ____ ____ ____ ____
+		|    |\\\\|\\\\|\\\\|    |    |
+		|    |  A |  B |  C |    |    |
+		|____|\\\\|\\\\|\\\\|____|____|		rett. SORGENTE=////
+		|    |\\\\|XXXX|XXXX|////|    |
+		|    |  ? |  A |  B |  C |    |		rett. DESTINAZIONE=\\\\
+		|____|\\\\|XXXX|XXXX|////|____|
+		|    |    |////|////|////|    |		rett. IN COMUNE=XXXX
+		|    |    |  D |  E |  F |    |
+		|____|____|////|////|////|____|
+
+
+		Fig. 21b Blittata tra rettangoli sovrapposti
+
+A questo punto dobbiamo copiare la seconda riga. La seconda riga della
+destinazione si sovrappone con la prima riga della sorgente. Questo significa
+che quando scriveremo i dati nella destinazione, sovrascriveremo una parte
+della sorgente, distruggendone il contenuto. Osservate pero` che i dati
+sovrascritti appartengono alla PRIMA riga della sorgente, che noi abbiamo gia`
+copiato, e che quindi non ci serve piu`. Pertanto non ci sono problemi.
+La situazione dopo la copia della seconda (e ultima) riga e` la seguente:
+
+		 ____ ____ ____ ____ ____ ____
+		|    |\\\\|\\\\|\\\\|    |    |
+		|    |  A |  B |  C |    |    |
+		|____|\\\\|\\\\|\\\\|____|____|		rett. SORGENTE=////
+		|    |\\\\|XXXX|XXXX|////|    |
+		|    |  D |  E |  F |  C |    |		rett. DESTINAZIONE=\\\\
+		|____|\\\\|XXXX|XXXX|////|____|
+		|    |    |////|////|////|    |		rett. IN COMUNE=XXXX
+		|    |    |  D |  E |  F |    |
+		|____|____|////|////|////|____|
+
+
+		Fig. 21c Blittata tra rettangoli sovrapposti
+
+Abbiamo ottenuto proprio cio` che volevamo, in quanto ora il rettangolo
+destinazione e` la copia esatta del contenuto del rettangolo sorgente PRIMA
+che iniziassimo la blittata. Notate che ora, invece il contenuto della sorgente
+e` cambiato, ma cio` era inevitabile.
+
+Potete vedere tutto cio` in pratica nell'esempio lezione9l1.s.
+
+Sembrerebbe dunque che la sovrapposizione tra sorgente e destinazione non crei
+problemi. Proviamo pero` ad esaminare il caso in cui la destinazione si trovi
+piu` in basso della sorgente:
+
+		 ____ ____ ____ ____ ____ ____
+		|    |////|////|////|    |    |
+		|    |////|////|////|    |    |
+		|____|////|////|////|____|____|		rett. SORGENTE=////
+		|    |////|XXXX|XXXX|\\\\|    |
+		|    |////|XXXX|XXXX|\\\\|    |		rett. DESTINAZIONE=\\\\
+		|____|////|XXXX|XXXX|\\\\|____|
+		|    |    |\\\\|\\\\|\\\\|    |		rett. IN COMUNE=XXXX
+		|    |    |\\\\|\\\\|\\\\|    |
+		|____|____|\\\\|\\\\|\\\\|____|
+		|    |    |    |    |    |    |
+		|    |    |    |    |    |    |
+		|____|____|____|____|____|____|
+
+
+		Fig. 22	 Blittata tra rettangoli sovrapposti
+
+Prima della blittata, la situazione e` la seguente:
+
+		 ____ ____ ____ ____ ____ ____
+		|    |////|////|////|    |    |
+		|    |  A |  B |  C |    |    |
+		|____|////|////|////|____|____|		rett. SORGENTE=////
+		|    |////|XXXX|XXXX|\\\\|    |
+		|    |  D |  E |  F |  ? |    |		rett. DESTINAZIONE=\\\\
+		|____|////|XXXX|XXXX|\\\\|____|
+		|    |    |\\\\|\\\\|\\\\|    |		rett. IN COMUNE=XXXX
+		|    |    |  ? |  ? |  ? |    |
+		|____|____|\\\\|\\\\|\\\\|____|
+
+		Fig. 23a Blittata tra rettangoli sovrapposti
+
+Iniziamo con il copiare la prima riga. La prima riga della destinazione e`
+parzialmente sovrapposta con la seconda riga della sorgente, che non e`
+ancora stata copiata. Ecco quello che si ottiene:
+
+		 ____ ____ ____ ____ ____ ____
+		|    |////|////|////|    |    |
+		|    |  A |  B |  C |    |    |
+		|____|////|////|////|____|____|		rett. SORGENTE=////
+		|    |////|XXXX|XXXX|\\\\|    |
+		|    |  D |  A |  B |  C |    |		rett. DESTINAZIONE=\\\\
+		|____|////|XXXX|XXXX|\\\\|____|
+		|    |    |\\\\|\\\\|\\\\|    |		rett. IN COMUNE=XXXX
+		|    |    |  ? |  ? |  ? |    |
+		|____|____|\\\\|\\\\|\\\\|____|
+
+		Fig. 23b Blittata tra rettangoli sovrapposti
+
+Come potete notare ci siamo persi i valori E ed F! Sembra proprio che stavolta
+la copia non riuscira` bene! Comunque copiamo anche la seconda riga, e vediamo
+che succede.
+
+		 ____ ____ ____ ____ ____ ____
+		|    |////|////|////|    |    |
+		|    |  A |  B |  C |    |    |
+		|____|////|////|////|____|____|		rett. SORGENTE=////
+		|    |////|XXXX|XXXX|\\\\|    |
+		|    |  D |  A |  B |  C |    |		rett. DESTINAZIONE=\\\\
+		|____|////|XXXX|XXXX|\\\\|____|
+		|    |    |\\\\|\\\\|\\\\|    |		rett. IN COMUNE=XXXX
+		|    |    |  D |  A |  B |    |
+		|____|____|\\\\|\\\\|\\\\|____|
+
+
+		Fig. 23c Blittata tra rettangoli sovrapposti
+
+Ecco fatto. La blittata e` finita ma il risultato non e` quello che volevamo.
+Siete convinti?
+
+No? Allora, guardatevi l'esempio lezione9l2.s e convincetevene!
+
+Cerchiamo di capire perche` la prima volta ha funzionato e stavolta no.
+Il problema nasce quando scriviamo sulle parti della destinazione che si
+sovrappongono con la sorgente, perche` cosi` facendo sovrascriviamo alcuni
+dati.
+Nel primo caso non ci sono stati problemi perche` i dati sovrascritti li
+avevamo gia` copiati.
+Cio` e` accaduto perche` la sorgente si trova piu` in basso (ad indirizzi
+maggiori) della destinazione, e la sovrapposizione si verifica tra la prima
+riga della sorgente e la seconda riga della destinazione.
+Siccome il blitter copia partendo dalla prima riga, i dati della prima riga
+della sorgente vengono copiati PRIMA di essere sovrascritti dalla seconda riga
+della destinazione.
+Nel secondo caso, invece, la sorgente si trova piu` in alto (ad indirizzi
+minori) della destinazione, e la sovrapposizione si verifica tra la seconda
+riga della sorgente e la prima della destinazione.
+I dati della seconda riga della sorgente, quindi, vengono sovrascritti durante
+la copia della prima riga, e cioe` PRIMA di essere copiati a loro volta,
+pertanto vengono persi.
+Per risolvere questo problema, bisognerebbe copiare prima la seconda riga e
+poi la prima.
+Cio` e` possibile utilizzando il MODO DISCENDENTE del blitter.
+Quando si utilizza questo modo, il blitter esegue la copia (o una qualunque
+altra operazione) in senso inverso a quanto fa di solito, cioe` parte dalla
+word piu` in basso a destra del rettangolo e prosegue verso sinistra e verso
+l'alto.
+Le words che blitta seguendo questo percorso hanno indirizzo via via minore.
+Si dice percio` che il blitter DISCENDE lungo la memoria, da cui il nome del
+modo di funzionamento (per contrasto, il modo normale viene detto anche MODO
+ASCENDENTE, infatti normalmente vengono blittate words con indirizzi via via
+crescenti).
+Prima di esaminare nel dettaglio come si usa il blitter in modo discendente,
+ritorniamo al problema della copia di regioni sovrapposte e verifichiamo che 
+il modo discendente e` la giusta soluzione.
+La situazione di partenza e` la seguente:
+
+		 ____ ____ ____ ____ ____ ____
+		|    |////|////|////|    |    |
+		|    |  A |  B |  C |    |    |
+		|____|////|////|////|____|____|		rett. SORGENTE=////
+		|    |////|XXXX|XXXX|\\\\|    |
+		|    |  D |  E |  F |  ? |    |		rett. DESTINAZIONE=\\\\
+		|____|////|XXXX|XXXX|\\\\|____|
+		|    |    |\\\\|\\\\|\\\\|    |		rett. IN COMUNE=XXXX
+		|    |    |  ? |  ? |  ? |    |
+		|____|____|\\\\|\\\\|\\\\|____|
+
+		Fig. 24a Blittata tra rettangoli sovrapposti
+
+Questa volta usiamo il modo discendente, percio` iniziamo a copiare a partire
+dall'ultima riga. In questo modo all'inizio non scriviamo sulla parte
+sovrapposta:
+
+		 ____ ____ ____ ____ ____ ____
+		|    |////|////|////|    |    |
+		|    |  A |  B |  C |    |    |
+		|____|////|////|////|____|____|		rett. SORGENTE=////
+		|    |////|XXXX|XXXX|\\\\|    |
+		|    |  D |  E |  F |  ? |    |		rett. DESTINAZIONE=\\\\
+		|____|////|XXXX|XXXX|\\\\|____|
+		|    |    |\\\\|\\\\|\\\\|    |		rett. IN COMUNE=XXXX
+		|    |    |  D |  E |  F |    |
+		|____|____|\\\\|\\\\|\\\\|____|
+
+		Fig. 24b Blittata tra rettangoli sovrapposti
+
+Adesso copiamo la prima riga. Nel farlo sovrascriviamo la seconda riga della
+sorgente, ma poiche` l'abbiamo gia` copiata non e` un problema:
+
+		 ____ ____ ____ ____ ____ ____
+		|    |////|////|////|    |    |
+		|    |  A |  B |  C |    |    |
+		|____|////|////|////|____|____|		rett. SORGENTE=////
+		|    |////|XXXX|XXXX|\\\\|    |
+		|    |  D |  A |  B |  C |    |		rett. DESTINAZIONE=\\\\
+		|____|////|XXXX|XXXX|\\\\|____|
+		|    |    |\\\\|\\\\|\\\\|    |		rett. IN COMUNE=XXXX
+		|    |    |  D |  E |  F |    |
+		|____|____|\\\\|\\\\|\\\\|____|
+
+		Fig. 24c Blittata tra rettangoli sovrapposti
+
+OK! Questa volta ci siamo. Ora la destinazione ha lo stesso aspetto della
+sorgente prima di effettuare la blittata.
+Per concludere, possiamo quindi dire che quando effettuiamo una copia con
+sorgente e destinazione sovrapposte, se la sorgente si trova ad indirizzi
+di memoria maggiori della destinazione, si deve fare la blittata in modo
+normale (ASCENDENTE), se invece la sorgente si trova ad indirizzi di memoria
+minori, si deve utilizzare il modo DISCENDENTE.
+		               __________
+		              /          \
+		             |_________ _ |
+		             / _______ \| |
+		            | /  o_o  \ | |
+		             \|  ___  |/\_|
+		         _____|\/ = \/|_(_)__
+		        /     |       |      \
+		       /      |       |       \
+		      /  _.    \_____/    __  _\_____
+		  ___/__ |        o        | _\_     \____
+		 /   \_ \|        o        |/ __\__|     /
+		|     |) |\_______________/|\(__/  \_/__/__
+		O==o==O_/|     ||__||      | / ____        \_
+		| `-' |   \____||__||_____/ /   / _    ___   \
+		| sk8 |    \             / (   / (_)\/ \      |
+		| .-. |     |_____Y_____|   \       / \/     /
+		O==o==O   __|     |    _|_   |           '   )
+		|     |  / ``     |    '' \  (              /
+		 \___/  (_________|________)  \_____________)
+
+A questo punto possiamo scendere nel dettaglio del modo discendente.
+Innanzitutto, il modo discendente va attivato mediante un bit di controllo.
+Si tratta del bit 1 del registro BLTCON1, che se settato ad 1 attiva il modo
+discendente, mentre quando viene azzerato (come abbiamo fatto finora)
+attiva il modo ascendente.
+Come abbiamo gia` detto, in modo discendente il blitter va "all'indietro"
+cioe` si sposta tra locazioni di memoria di indirizzo via via minore.
+Per questo e` necessario che i puntatori dei canali DMA puntino all'inizio
+della blittata alla word della blittata che ha indirizzo maggiore di tutte,
+cioe` la prima word che verra` blittata.
+Si tratta, come sapete, della word piu` in basso e piu` a destra del
+rettangolo di words che verra` blittato.
+Per esempio, nel caso in cui si voglia blittare un rettangolo largo 3 words e
+alto 2 righe, si dovranno inizializzare i puntatori con l'indirizzo della terza
+word della seconda riga del rettangolo, che nella figura e` indicata con due
+asterischi (**)
+
+		 ____ ____ ____ ____ _ _ _ _ _ _ ____
+		|    |    |    |    |		|    |
+		|    |    |    |    |	        |    |
+		|____|____|____|____|		|____|
+		|    |\\\\|\\\\|\\\\|		|    |
+		|    |\\\\|\\\\|\\\\|		|    |
+		|____|\\\\|\\\\|\\\\|		|____|
+		|    |\\\\|\\\\|\\\\|		|    |
+		|    |\\\\|\\\\| ** |		|    |
+		|____|\\\\|\\\\|\\\\|		|____|
+		|    |    |    |    |		|    |
+		|    |    |    |    |	        |    |
+		|____|____|____|____|		|____|
+		|				     |
+		|				     |
+
+		Fig. 25 Rettangolo di word con evidenziata la word
+			da puntare all'inizio della blittata
+
+Per calcolare l'indirizzo di tale word si segue un ragionamento simile a quello
+fatto nel caso ascendente. Dobbiamo calcolare la distanza (offset) di tale word
+dall'inizio del bitplane. Supponiamo di conoscere le coordinate Xa e Ya del
+pixel piu` in alto a sinistra del rettangolo, ed anche la larghezza in words L
+e l'altezza A del rettangolo. La word che ci interessa appartiene all'ultima
+riga del rettangolo che ha coordinata Yb=Ya+A. L'offset della prima word di
+tale riga e` dato dalla seguente formula:
+
+OFFSET_Y = 2*(Yb*NUMERO_WORDS_PER_RIGA)			nel caso normale e
+
+OFFSET_Y = 2*(Yb*NUMERO_WORDS_PER_RIGA*NUMERO_PLANES)	nel caso interleaved.
+
+Ora dobbiamo calcolare la distanza tra la prima word della riga e l'ultima word
+del rettangolo. Come sappiamo tale distanza e` data da 2*(Xa/16).
+D'altronde tra la prima e l'ultima word del rettangolo ci sono L-1 words, che
+equivalgono ad una distanza (che si esprime in bytes) di 2*(L-1).
+Sommando le 2 differenze abbiamo:
+
+OFFSET_X=2*(Xa/16+L-1).
+
+
+	|    |		|    |\\\\|\\\\|	|\\\\|
+	|  A |		|    |  B |\\\\|	|  C |
+	|____|_ _	|____|\\\\|\\\\|_ _	|\\\\|
+
+	\____________________/\______________________/
+		|			|
+	    Xa/16 words		   L words
+
+	distanza tra word A e word B = 2*(Xa/16)
+	distanza tra word B e word C = 2*(L-1)
+
+		Fig. 26 Calcolo OFFSET_X
+
+Quindi l'indirizzo da scrivere nei puntatori dei canli DMA e` dato da:
+
+INDIRIZZO_WORD = INDIRIZZO_BITPLANE+OFFSET_Y+OFFSET_X.
+
+Per quanto riguarda i moduli e la dimensione della blittata, non ci sono
+differenze rispetto al caso ascendente, vengono calcolati tutti con le stesse
+formule. Ora possiamo finalmente copiare correttamente 2 regioni rettangolari
+sovrapposte anche quando la sorgente inizia ad un indirizzo di memoria minore
+di quello della destinazione: si tratta dell'esempio9l3.s.
+
+In modo discendente le maschere e lo shift si comportano diversamente
+rispetto al modo ascendente.
+Le maschere funzionano sempre nello stesso modo, ma cambiano le word a cui si
+applicano.
+La maschera contenuta in BLTAFWM viene applicata, come per il caso ascendente,
+alla prima word che blittiamo di ogni riga.
+Siccome pero` in modo discendente blittiamo al contrario, la prima word e` la
+word piu` a destra del rettangolo, mentre in modo ascendente e` la word piu` a
+sinistra.
+Allo stesso modo, la maschera contenuta in BLTALWM viene sempre applicata
+all'ultima word blittata di ogni riga, solo che in modo discendente tale word
+e` la word piu` a sinistra. In sintesi:
+
+- In modo ascendente (normale) BLTAFWM si applica alla word piu` a sinistra
+  e BLTALWM alla word piu` a destra.
+
+- In modo discendente BLTAFWM si applica alla word piu` a destra e BLTALWM
+  alla word piu` a sinistra.
+  
+Se guardiamo l'immagine come appare sul video, passando al modo discendente
+le maschere si scambiano le colonne su cui operano. Per verificarlo caricate
+ed eseguite l'esempio lezione9m1.s che fa esattamente le stesse cose
+di lezione9h1.s, solo che opera in modo discendente. Vedrete che le maschere
+producono gli stessi effetti ma scambiando le colonne.
+
+Lo shift, in modo discendente presenta una differenza fondamentale: viene fatto
+verso SINISTRA, anziche` verso destra. Se specifichiamo un valore di shift pari
+per esempio a 2, la sorgente viene shiftata di 2 pixel VERSO SINISTRA.
+Utilizzando questa caratteristica possiamo realizzare l'effetto di scorrimento
+di un immagine verso sinistra. Lo trovate nell'esempio lezione9m2.s.
+
+A questo punto, siamo finalmente in grado di realizzare uno degli effetti piu`
+classici delle demo: lo SCROLLTEXT, ovvero un testo che scorre sullo schermo da
+destra verso sinistra.
+
+Un semplice ma significativo esempio e` la lezione9n1.s, nella quale troverete
+tutte le spiegazioni. Mi raccomando studiate con particolare attenzione questo
+esempio perche` saper fare uno scrolltext e` assolutamente fondamentale per
+un demo-coder!
+
+Nell'esempio Lezione9n2.s troverete lo scrolltext dell'intro del disco1.
+
+	                                      .-%%%-,
+	                                     (       )
+	                                   (         )
+	              -~x~-               (          )
+	            /%     %\           (           )
+	           |         |         (           )
+	           |         |        (           )
+	           |     __ _,       (%%%%-(     )
+	          /\/\  (. ).)       `_'_', (   )
+	           C       __)       (.( .)-(  )
+	           |   /%%%  \      (_      ( )
+	           /   \ %===='    /_____/` D)
+	         /`-_   `---'         \     |
+	    .__|%-/~\-%|_/_   |~~~~~~~||    |
+	   __.         ||/.\  |       |OooooO
+	   \           ---. \ |       |      \ _
+	  _-    ,`_'_'  .%\  \|__   __|-____  / )
+	 <     -(. ).)   > \  ( .\ (. )     \(_/ )
+	  %-       _) \_- ooo @  (_)  @      \(_//.
+	 / /_C (-.____)  /((O)/       \     ._/\%_.
+	/   |_\     /   / /\\\\`-----''    _|>o<  |__
+	|     \ooooO   (  \ \\ \\___/     \ `_'_',  /
+	 \     \__-|    \  `)\\-~\\ ~--.  /_(.(.)- _\
+	  \   \ )  |-`--.`--=\-\ /-//_  '  ( c     D\
+	   \_\_)   |-___/   / \ V /.% \/\\\ (@)___/ %|
+	  /        |       /   | |.  /`\\_/\/   /   /
+	 /         |      (   C`-'` /  |  \/   (/  /
+	/_________-        \  `C__-%   |  /    (/ /
+	     | | |          \__________|  \     (/
+
+Avete capito come funziona lo scrolltext? Se la risposta e` affermativa,
+potete iniziare ad essere soddisfatti di quanto avete imparato. Ormai
+conoscete il funzionamento di base del blitter. Nella prossima lezione
+scopriremo i segreti piu` nascosti di questo potente amico, a partire
+dal piu` grande, il piu` difficile da capire, con il quale abbiamo avuto a che
+fare per tutta questa lezione ma che abbiamo sempre evitato:
+il funzionamento dei MINTERMS!
+

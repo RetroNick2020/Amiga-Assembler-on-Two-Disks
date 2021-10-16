@@ -1,0 +1,9 @@
+Errors in original sources in Randy/RamJam's assembler-course
+
+LEZIONE3d.s
+line 47, gfxbase should be GfxBase (when using default settings of ASM-One)
+line 232, the ";" shouldn't be there
+
+LEZIONE3d.s
+line 216, "$67,ff" should be "67,$ff"
+
