@@ -3,6 +3,8 @@ Project for translating Fabio Ciuccis amazing assembler-course for the Amiga fro
 
 I think it is quite unique in that it in addition to classic Amigas also covers 68020+ and AGA Amigas, focusing on demo and game development, while at the same time making sure the code can run from harddisk, CD-ROM and CD32, with any memory configuration.
 
+Both sources and lessons contains numerous ASCII-art drawings, making this an even more authentic travel back in time :-)
+
 Original text is in Italian, published under the name "Corso Completo di programmazione assembler in due dischi", 2016, under the GNU License v1.3
 
 Link to original projects web-site: http://corsodiassembler.ramjam.it/index_en.htm
