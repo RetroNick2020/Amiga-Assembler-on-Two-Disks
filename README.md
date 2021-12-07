@@ -26,4 +26,7 @@ I have chosen to generate ASCII-files that can be used in the Amiga-environment,
 This is an on-going process. Parts of the translating tasks can be automated (I'm using some simple AutoHotkey scripts), but one still need to verify that the text makes sense.
 Feel free to join. I am currently working on lesson 12. Some source-files are translated, but this is tedious work, will finish the lessons first. But the sources will in many cases contain material not covered in the lessons.
 
-Roger, 07. dec 2021
+Some raw image-files are missing from the package I have downloaded from the site above. You may need to make your own files to run and test some sources.
+
+
+Roger, Brevik/Norway, 07. dec 2021
