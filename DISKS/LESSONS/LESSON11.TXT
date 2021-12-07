@@ -1,0 +1,2490 @@
+		  __________________________________________
+         ______  |::.                                    .::|  ______
+        //_____\ |:::: CORSO DI ASSEMBLER - LEZIONE 11 .::::| /_____\\
+       _\\ O o / |::::::::::::::::::::::::::::::::::::::::::| \ o O //_
+       \_/\_-_/_  ------------------------------------------' _\_-_/\_/
+        / __|.  \/ /                                      \ \/  .|__ \
+       /____|. \__/                                        \__/ .|____\
+    .---/   |.  \--------------------------------------------/  .|   \---.
+   /   /____|____\      INTERRUPT, CIAA/CIAB, DOSLIB        /____|____\   \
+  /                                                                        \
+  `-------------------------------------------------------------------------'
+
+Author: Fabio Ciucci
+
+(Directory Sources7) - therefore write "V Assembler3:sorgenti7"
+
+Now that you have mastered how the blitter works, you can confidently say that 
+you know the Amiga hardware, since you know how to program 68000, blitter and 
+copper. But you never stop learning, and in this lesson we will see advanced 
+information on the 68000, such as interrupts, as well as listings showing 
+particular uses of Blitter and Copper, and finally the use of the CIAA and 
+CIAB chips, which for now we have only used to test mouse clicks.
+
+I'd suggest starting with the new information on the 68000, in order to make a 
+better startup-code than the one we did during LESSON 8.
+
+Information on exception vectors, interrupts, etc. that will be explained will 
+not all be useful and indispensable for programming games and demos, but only 
+a part of them will serve us. So do not be intimidated by the amount of things 
+mentioned: in practice, what we will use is very little!
+
+First of all, it is necessary to talk about the two operating modes of the 
+680x0, namely the user mode and the supervisor mode. Already in 68000-2.txt it 
+was mentioned, without explaining, that there are "privileged" instructions, 
+which must be executed in supervisor mode, ie during an exception or an 
+interrupt.
+
+For now we have made our routines to always run in USER mode, because it was 
+not necessary to execute privileged instructions, and because we did not use 
+the processor interrupts.
+
+I must state that the execution speed does not change between user mode and 
+supervisor mode, so having your program run as an exception or an interrupt 
+will certainly not disturb the execution.
+
+On the other hand, an "exception" is so called precisely because it is 
+something that must happen only in "exceptional" cases, for example a software 
+failure, known as GURU. Note that there are gurus that are caused by the Amiga 
+operating system, (like exec errors) and others that are programmed directly 
+by Motorola, the author of 680x0. For example, the errors of BUS, DIVISION BY 
+ZERO, etc., ie the vectors, are of this type.
+
+You may have noticed that the operating system is able to update the position 
+of the mouse pointer arrow even if we are running our own routine, as long as 
+we do not disable multitasking with a call to Disable (). Well, if the 
+processor is looping our way, how does each frame update other things? You 
+will remember that if you disable system interrupts, everything stops. In 
+fact, it uses interrupts, which "interrupt" the execution of our little 
+program every frame, execute their own routine, and resume the execution of 
+our program where they left it, all without us realizing it!
+
+In addition to interrupts, there are other ways to perform supervisor 
+routines, such as TRAP instructions, or any error in a program. For example, 
+when a division by zero occurs, or the processor finds data that does not 
+correspond to any instruction, the routines of guru meditation and software 
+failure are performed in a supervisor mode.
+
+The emulators of other processors, for example, make sure that each binary 
+instruction value of the emulated processor, for example an 80286 or the 6502 
+of the commodore 64, corresponds to a routine that does the operations that 
+would have done that instruction for that processor. (more or less!).
+
+Now, it is not the purpose of this course to learn how to program operating 
+systems or emulators, since the Amiga operating system is already the best in 
+the world, and the emulators on the Amiga are unsurpassed, so much so that 
+anyone who has an Amiga can run the MacIntosh and MSDOS programs, and play the 
+old C64 and Spectrum games.
+
+But even if you want to program a demo or a game, or a utility like protracker 
+/ octamed, it is VERY USEFUL to handle some interrupts.
+
+Many older demos and games started out by supervisoring the 68000, writing to 
+the SR right away, and playing weird games with the Stack.
+
+Well, many of these games do not work on computers with 68020, because the 
+Status Register in the most advanced processors has additional functions, 
+which these programmers ignored, and by setting or resetting bits in bulk they 
+made a huge mistake. Also in supervisor mode the stack (SP) is a "private" 
+stack of supervisor mode, while the user stack is accessed with the USP 
+register (User Stack Pointer). In short, as a supervisor it is better to go 
+there with lead feet, unless you are perfectly familiar with all the new 
+features of the 68020/30/40 and also of the 68060!
+
+In fact, the user mode serves precisely to avoid executing instructions that 
+could cause different effects on different processors, which only operating 
+systems must execute. But coders have always felt tougher to turn the 
+registers upside down in a supervisor way, with the result of gaining a 
+reputation as "programmers incapable of incompatible code".
+
+But let's do some supervisor instruction before continuing with the theory. 
+Among the many ways that there are to execute a routine in exception, the most 
+"safe" is to use the special function of the operating system "exec.library / 
+Supervisor", which requires entering the address in A5 of the routine to be 
+performed:
+
+	move.l	4.w,a6			; ExecBase in a6
+	lea	SuperCode(PC),a5	; Routine to be run in supervisor
+	jsr	-$1e(a6)		; LvoSupervisor - run the routine
+					; (does not save registers! attention!)
+	rts				; exit, after running the "SuperCode" 
+					; routine in supervisor.
+
+SuperCode:
+	movem.l	d0-d7/a0-a6,-(SP)	; Save the registers on the stack
+	...				; instructions to be executed as if it
+	...				; were a subroutine....
+	movem.l	(SP),d0-d7/a0-a6	; Retrieve the registers from the stack
+	RTE	; ReTurn from Exception: like RTS, but for exceptions.
+
+
+
+As you can see, there is nothing easier. You can consider the routine to be 
+executed as a subroutine to be called with JSR or BSR, only it is called with 
+"JSR -$1e(a6)" after putting its address in A5, and of course the ExecBase in 
+A6. At the end of the short "supervisor subroutine", instead of putting an RTS 
+to return, it will be necessary to put an RTE, specific for returning from 
+exceptions and interrupts. At this point the processor will revert to 
+executing the instruction under the "JSR -$1e(a6)" in user mode, just as if it 
+were a "BSR" or "JSR". The Supervisor function does not save the registers or 
+restore them with the movem, so if any are changed during the supervisor 
+routine, these values will remain when returning from that routine.
+
+In this regard, I recommend that you manually save and restore the registers 
+at the beginning and end of the supervisor routine.
+
+Note that accessing SP or A7 in supervisor mode saves itself in the supervisor 
+stack, and not in the user stack, which can be called up as USP. This is not a 
+problem, as the supervisor stack saves and restores like the user stack, but 
+in case of dangerous stack programming you could get some general 
+implementation errors.
+
+We execute some privileged instructions in the example lesson11a.s.
+
+Here are the privileged instructions that can only be executed in supervisor 
+mode:
+
+	ANDI.W	#xxxx,SR
+	ORI.W	#xxxx,SR
+	EORI.W	#xxxx,SR
+	MOVE.W	xxxxx,SR
+	MOVE.W	SR,xxxxx
+	MOVEC	register,register	; 68010+ - special registers for
+					; cache control, MMU, vectors such as:
+					; CAAR,CACR,DFC,ISP,MSP,SFC,USP,VBR.
+	RTE
+
+There would also be MOVES, RESET, STOP, but we don't care.
+
+The possibility of acting on the Status Register is of little interest, 
+because it is very dangerous (given the difference of the SR bits between 
+68000 and other 680x0), and it is not essential to disturb it. Among other 
+things, when you jump to an exception, in addition to the Program Counter, 
+also the Status Register is saved in the stack, and at the time of the RTE the 
+old value of the Program Counter is restored, to return under the "JSR 
+-$1e(a6) ", and the old SR, so there are no changes, except during the 
+execution of the exception.
+
+Instead the MOVEC instruction will interest us much more, because in order to 
+use an interrupt so that it works also on 68020+ processors it is necessary to 
+know where the VBR (Vector Base Register) is located.
+
+As for the control of the CACHE, I think it is better not to interfere, so 
+that the user can activate or deactivate them with utilities before running 
+our demo or game, in order to evaluate the differences in setting. If, on the 
+other hand, we decide for him which caches must be activated and which 
+deactivated, we also risk making code that does not work on the 68060 and any 
+new RISC processors that could emulate it.
+
+The MOVEC instruction, available only from 68010 onwards, is used to copy the 
+contents of an An or Dx register into a special register, or vice versa.
+Let's see the special registers present in 68020:
+
+	CAAR	- CAche Address Register
+	CACR	- CAche Control Register
+	VBR	- Vector Base register
+
+There are also DFC (Destination Function Code), SFC (Source Function Code), 
+ISP (Interrupt Stack Pointer), MSP (Master Stack Pointer), USP (User Stack 
+Pointer), but we are not interested, because they are only for those who 
+program systems operating systems, emulators, etc.
+
+At this moment we need to know the value of the VBR special register, we will 
+see why later. To get it, a "MOVEC VBR, d0", for example, is enough.
+
+But what is the Vector Base Register? First of all we need to explain what a 
+vector is (not to be confused with vectors in mathematics, or 3d vectors!).
+
+First let's see the table of vectors, then let's explain them:
+
+VECTOR NUM.    OFFSET	Assignment and meaning
+
+	0	$0	It is only needed at the time of reset (SSP start)
+	1	$4	It only serves to reset, this is ExecBase (PC start)
+	2	$8	GURU/soft. failure: BUS error
+	3	$c	GURU/soft. failure: Address error
+	4	$10	GURU/soft. failure: Illegal instruction
+	5	$14	GURU/soft. failure: Division by zero
+	6	$18	Exceptions Thrown by Instructions CHK,CHK2 (68020+)
+	7	$1c	Exceptions Thrown by Instructions TRAPV (68020+ TRAPCC)
+	8	$20	GURU/soft. failure: Violation of privilege
+	9	$24	Trace (trace exception)
+	$A	$28	GURU/soft. failure: Line emulator %1010 (LINE-A)
+	$B	$2c	GURU/soft. failure: Line emulator %1111 (LINE-F)
+	$C	$30	not used
+	$D	$34	Coprocessor protocol violation (68020+)
+	$E	$38	Format error (only 68020, after CALLM,RTM)
+	$F	$3c	Interruption not initialized
+	...	...
+
+	$18	$60	Spurious interruption
+
+; Here are the interruption autovectors: these are the ones that interest us!
+
+	$19	$64	INTERRUPT level 1 (softint,dskblk,tbe)
+	$1a	$68	INTERRUPT level 2 (ports: I/O,ciaa,int2)
+	$1b	$6c	INTERRUPT level 3 (copper,vblanc,blit)
+	$1c	$70	INTERRUPT level 4 (audio channels aud0/aud1/aud2/aud3)
+	$1d	$74	INTERRUPT level 5 (rbf,dsksync)
+	$1e	$78	INTERRUPT level 6 (exter: ciab,int6 + inten)
+	$1f	$7c	INTERRUPT level 7 (external hardware cards: NMI)
+
+	$20	$80	Vector callable with TRAP #0
+	$21	$84	Vector callable with TRAP #1
+	$22	$88	Vector callable with TRAP #2
+	$23	$8c	Vector callable with TRAP #3
+	$24	$90	Vector callable with TRAP #4
+	$25	$84	Vector of TRAP # 5, etc. to TRAP # 15
+	...
+
+	vectors for errors of the possible mathematical coprocessor and of the 
+	MMU follow, which do not interest us.
+
+
+                             -|             |- 
+         -|                  [-_-_-_-_-_-_-_-]                  |- 
+         [-_-_-_-_-]          |             |          [-_-_-_-_-] 
+          | o   o |           [  0   0   0  ]           | o   o | 
+           |     |    -|       |           |       |-    |     | 
+           |     |_-___-___-___-|         |-___-___-___-_|     | 
+           |  o  ]              [    0    ]              [  o  | 
+           |     ]   o   o   o  [ _______ ]  o   o   o   [     | ----__________
+_____----- |     ]              [ ||||||| ]              [     | 
+           |     ]              [ ||||||| ]              [     | 
+       _-_-|_____]--------------[_|||||||_]--------------[_____|-_-_ 
+      ( (__________------------_____________-------------_________) ) 
+
+
+Let's imagine the situation of a 68000 processor, for which there is no need 
+to look up the value of the VBR register (it doesn't even exist!).
+In this case the offset is the memory location! $0 = $00000000. At address $4 
+we find the Execbase, while the first long at $0 is usually reset to zero. But 
+here "inside" the location $8 we find the address of the routine that makes 
+the message "GURU MEDITATION / SOFTWARE FAILURE" appear in case of BUS ERROR. 
+In fact this guru, as seen in 68000-2.TXT, has as identification number 
+#00000002, that is his vector number.
+
+The third vector contains the address of the routine that brings up the 
+ADDRESS ERROR guru (#00000003), and so on.
+
+In practice, when the processor finds one of these errors, it jumps to the 
+corresponding vector, which contains the address of the routine to be executed 
+in supervisor mode (given the seriousness of the situation!).
+
+At the time of reset, all the addresses in the vectors from the first to the 
+last are written from the ROM. If you have little programs that modify the 
+messages of software failures or gurus, know that they make the vectors 
+"point" to its routines, rather than to the normal system routines.
+
+Of course, there are "legal" ways to change vectors, ie by switching between 
+operating system structures and routines. Roughly writing the address of your 
+routine into the vector can be ineffective or incompatible.
+
+Eg:
+
+	MOVE.L	#MiaDivisionePerZero,$14.w	; I replace the guru vector 
+						; for div. by zero.
+	rts
+
+MiaDivisionePerZero:
+	...
+	RTE
+
+NEVER DO AS IN THIS EXAMPLE, FOR A COUPLE OF REASONS. THE FIRST IS THAT IN 
+68020+ THIS VECTOR IS NOT CALLED FROM ADDRESS $14, THE SECOND IS THAT IT IS AN 
+INCOMPATIBLE METHOD WITH MMU AND AMIGA OPERATING SYSTEM STRUCTURES.
+
+However, in theory this system should work, and on the Amiga500 it almost 
+always works, as long as the supervisor routine is well written.
+
+The modification of the error vectors / guru, however, interests us in the 
+least, because our program should not contain errors to be corrected at the 
+moment of the jump to the guru / software failure!
+
+Even the vectors of the "TRAP #xx" instructions are of little interest to us. 
+Such vectors were used in the past to run as an exception, but we have already 
+seen a safer way, that via the operating system.
+
+However, for your curiosity, the "ancient" way was:
+
+	move.l	$80.w,OldVector		; Save the old TRAP #0 vector
+	move.l	#SuperCode,$80.w	; Routine to be executed in supervisor 
+					; mode placed in the TRAP #0 vector
+	TRAP	#0			; Run Supercode as an exception
+	move.l	OldVector(PC),$80.w	; restore the old TRAP #0 vector
+	rts				; exit, after running the "SuperCode" 
+					; routine in supervisor mode.
+OldVector:
+	dc.l	0
+			
+SuperCode:
+	movem.l	d0-d7/a0-a6,-(SP)	; Save the registers on the stack
+	...				; instructions to be executed as if it 
+	...				; were a subroutine ....
+	movem.l	(SP),d0-d7/a0-a6	; Retrieve the registers from the stack
+	RTE	; Return From Exception: Like RTS, but for exceptions.
+
+As you can see, you can easily understand the function of the TRAP 
+instruction: in practice, if you execute a "TRAP #0", the routine whose 
+address is contained in the .l address at $80 is executed as an exception, 
+while with the "TRAP #1 "you do that in $ 84, and so on.
+
+Likewise, interrupt vectors contain the address of the routine to execute in 
+the event of an interrupt. The ancient way to set an interrupt was:
+
+	move.l	$6c.w,OldInt6c		; Save the old int level 3
+	move.l	#MioInt6c,$6c.w		; My routine for int level 3
+
+At the end of the program, the old interrupt in $6c was reset.
+In this interrupt usually the "BSR.w MT_MUSIC" is put, since this interrupt 
+(VERTB) is executed once per frame.
+
+	                       _----|         _ _ _ _ _ 
+	                        ----|_----|   ]-I-I-I-[ 
+	    _ _ _ _ _ _ _----|      | ----|   \ `  ' / 
+	    ]-I-I-I-I-[  ----|      |     |    |. ` | 
+	     \ `   '_/       |     / \    |    | /^\| 
+	      []  `__|       ^    / ^ \   ^    | |*|| 
+	      |__   ,|      / \  / ^ ^`\ / \   | ===| 
+	   ___| ___ ,|__   / ^  /=_=_=_=\ ^ \  |, `_| 
+	   I_I__I_I__I_I  (====(_________)_^___|____|____ 
+	   \-\--|-|--/-/  |     I  [ ]__I I_I__|____I_I_| 
+	    |[] `    '|_  |_   _|`__  ._[  _-\--|-|--/-/ 
+	   / \  [] ` .| |-| |-| |_| |_| |_| | []   [] | 
+	  <===>      .|-=-=-=-=-=-=-=-=-=-=-|        / \ 
+	  ] []|` ` [] | .   _________   .   |-      <===> 
+	  <===>  `  ' ||||  |       |  |||  |  []   <===> 
+	   \_/     -- ||||  |       |  |||  | .  '   \_/ 
+	  ./|' . . . .|||||/|_______|\|||| /|. . . . .|\_ 
+	- --------------------------------------------------- 
+
+*******************************************************************************
+*		THE VBR REGISTER IN 68010 AND HIGHER PROCESSORS		      *
+*******************************************************************************
+
+You may be wondering what VBR has to do with vectors. Well, the Vector Base 
+Register is the BASE address to which to add the offsets to find the address 
+of the vectors. If VBR = 0, then interrupt level 3 will be at $6c, as in 
+68000, and similarly TRAP #0 will always be at $80, and the examples above 
+would work.
+
+But if the VBR were at $10000, the level 3 interrupt would no longer be at 
+$6c, but at VBR + $6c, which is $1006c! The same for all other vectors.
+
+So, in principle:
+
+	vector address = VBR + OFFSET
+
+On the 68000 processor the base is always $0000, so much so that there is 
+neither the VBR register nor the privileged instruction MOVEC. But on 68010 
+and above the VBR can be moved to other places, even to FAST RAM.
+
+After a reset, the VBR is however always reset, both on A3000 and on A1200 or 
+A4000. It is by running SETPATCH or other utilities that the VBR is moved.
+
+In fact, many demos / games on files that work if started by themselves from a 
+disk without loading the setpatch first, do not work when loaded from the 
+workbench shell. Some work but are "silent", precisely because they write 
+their interrupt, which plays only the music, in $6c, when instead the VBR 
+points to more than $0000.
+
+Since we know this, just check if the processor is a 68000 or a 68010+, and if 
+it is a 68010 or higher, take the VBR value and add it to the vector you want 
+to change.
+
+Here's how to do it in practice:
+
+	move.l	4.w,a6		; ExecBase in a6
+	btst.b	#0,$129(a6)	; Test if we are on a 68010 or higher
+	beq.s	IntOK		; it's a 68000! Then the base is always zero.
+	lea	SuperCode(PC),a5 ; Routine to be run in supervisor mode
+	jsr	-$1e(a6)	; LvoSupervisor - run the routine
+				; (does not save registers! attention!)
+	bra.s	IntOK		; We have the value of the VBR, let's 
+				; continue...
+
+;********************** SUPERVISOR CODE for 68010+ **********************
+SuperCode:
+	movem.l	a0-a1,-(SP)	; Save a0 and a1 on the stack
+	dc.l  	$4e7a9801	; Movec Vbr,A1 (68010+ instruction).
+				; it is in hexadecimal because not all 
+				; assemblers assemble the movec.
+	lea	BaseVBR(PC),a0	; Label where to save the VBR value
+	move.l	a1,(a0)		; Save the value.
+	movem.l	(SP)+,a0-a1	; Restore the old values of a0 and a1
+	RTE			; Return from the exception
+;*****************************************************************************
+
+BaseVBR:
+	dc.l	0
+
+IntOK:
+	move.l	BaseVBR(PC),a0	 ; In a0 the value of the VBR
+	move.l	$64(a0),OldInt64 ; Sys int level 1 saved (softint,dskblk)
+	move.l	$68(a0),OldInt68 ; Sys int level 2 saved (I/O,ciaa,int2)
+	move.l	$6c(a0),OldInt6c ; Sys int level 3 saved (coper,vblanc,blit)
+	move.l	$70(a0),OldInt70 ; Sys int level 4 saved (audio)
+	move.l	$74(a0),OldInt74 ; Sys int level 5 saved (rbf,dsksync)
+	move.l	$78(a0),OldInt78 ; Sys int level 6 saved (exter,ciab,inten)
+
+	movem.l	d0-d7/a0-a6,-(Sp)	; Save the registers on the stack
+	bsr.s	START			; Do the main routine
+	movem.l	(sp)+,d0-d7/a0-a6	; Take the registers off the stack
+
+	move.l	BaseVBR(PC),a0	     ; In a0 the value of the VBR
+	move.l	OldInt64(PC),$64(a0) ; Sys int level 1 saved (softint,dskblk)
+	move.l	OldInt68(PC),$68(a0) ; Sys int level 2 saved (I/O,ciaa,int2)
+	move.l	OldInt6c(PC),$6c(a0) ; Sys int level 3 saved (coper,vblanc,blit)
+	move.l	OldInt70(PC),$70(a0) ; Sys int level 4 saved (audio)
+	move.l	OldInt74(PC),$74(a0) ; Sys int level 5 saved (rbf,dsksync)
+	move.l	OldInt78(PC),$78(a0) ; Sys int level 6 saved (exter,ciab,inten)
+	rts
+
+START:
+	move.l	BaseVBR(PC),a0	   ; In a0 the value of the VBR
+	move.l	#MioInt6c,$6c(a0)  ; I put my routine in interrrupt level 3
+	...
+	I execute the program
+	...
+	rts
+
+Note that even if you wanted to use the TRAP instruction, you would have to 
+put the BaseVbr in a0 and make the offset $80 (a0). The same is true for all 
+vectors.
+
+From this lesson onwards there is a new startup, startup2.s, to be included in 
+place of startup1.s. The only difference is that it contains the instructions 
+seen above and the BaseVbr label is available to modify the interrupts 
+properly on all the microprocessors. Saving old interrupts and restoring them 
+at the end are done by the startup, together with saving and restoring the DMA 
+and INTENA channels.
+
+Another change is the addition of a routine that blocks mouse and keyboard 
+input to the operating system, we will see that loading the files will help.
+
+Now that we know how to replace a system interrupt with our own, we need to 
+see how to do our interrupt.
+
+To anticipate the following pages, let's play the interrupt music in the 
+example listing Lesson 11b.s. You will understand better how it works by 
+continuing to read!
+
+                                |||||
+.__________________________.oOo_/o_O\_oOo.____________________________________.
+*******************************************************************************
+*		HOW TO "BUILD" AN INTERRUPT ROUTINE			      *
+*******************************************************************************
+
+The interrupt system allows an external device or a custom chip to interrupt 
+the execution by the processor, to make it jump in user mode to the routine 
+whose address must be found in one of the interrupt autovectors (for example 
+$6c).
+
+These interrupts have different levels of PRIORITY, ranging from a minimum 
+level (1) to the maximum level (7). These priorities are used in the event 
+that one or more interrupts occur during the execution of an interrupt. 
+
+For example, if the normal program in user mode is interrupted by a low level 
+interrupt, say 2, and while this routine is being executed, a request for a 
+higher level interrupt is presented, for example 5, interrupt 2 is in turn 
+interrupted by interrupt 5, with higher priority, and once the latter 
+interrupt is terminated, the control returns to level 2 interrupt, which then 
+passes it back to the normal program in user mode. 
+
+In this way, more interrupt routines can wait to finish execution, and 
+depending on their level they will finish executing earlier. 
+
+The need to introduce interrupts from the very first microprocessors is linked 
+to the fact that CPU power is often misused, due to very long waiting loops. 
+For example, if you were to wait for the vertical blank to start, you would 
+have to do a loop that checks the line reached, and until this line is reached 
+the processor does nothing but block itself in that ridiculous loop. If the 
+wait for a certain signal were a few seconds, imagine how processor power 
+would be wasted! For this there are interrupts, which allow the processor to 
+execute programs without worrying about waiting for "events".
+
+If you generate a level 3 interrupt every vertical blank, you can have the 
+processor calculate a fractal or a 3d image, and when the interrupt occurs, at 
+the time of vertical blanking, the computation of the 3d solid will be 
+interrupted, the routine to be executed at the beginning of the Vblank will be 
+executed, then it will return to continue the 3d routine where it was left off.
+
+Multitasking itself is possible thanks to this: being able to print or read 
+from the disk drive while doing something else is possible because, unlike the 
+MSDOS PC, the processor can perform a task that will be interrupted at the 
+right time by the disk interrupt or of the serial / parallel port, and which 
+will be resumed as soon as these interrupts are executed.
+
+The Amiga assigns 6 of the 7 available interrupt levels to signals produced by 
+custom chips (blitter, copper, cia) in certain situations.
+
+The seventh level is used by external cards such as Action Replay, since the 
+IPL2-IPL0 lines that generate it are brought to the expansion port.
+
+The first 6 interrupt levels are generated by the custom chips, for example 
+when completing a blitt or a video vertical blank.
+
+                                 ||||
+                            _A_  /oO\
+.__________________________(iIi)_\\//_oOo.____________________________________.
+*******************************************************************************
+*			HOW INTENA AND INTENAR ARE USED			      *
+*******************************************************************************
+
+It is possible, through the INTENA register ($dff09a), to mask some of these 
+interrupts, to avoid them being generated.
+
+There is also a register for requesting interrupts, the INTREQ ($dff09c).
+
+These registers work like the DMACON ($dff09a), indeed bit 15 decides whether 
+the other specified bits must be set or cleared.
+
+As we did for the DMACON / DMACONR in lesson 8, let's see the "map" of the 
+INTENA ($dff09a) write-only and INTENAR ($dff01c) read-only registers:
+
+INTENA/INTENAR ($dff09a/$dff01c)
+
+BIT	NAME	 LEV.	DESCRIPTON
+
+15	SET/CLR		"Set / Clear" control bit. Determines if the 1-bits 
+			must be cleared or set, as in DMACON.
+			Bits = 0 will not be set or reset
+14	INTEN		Master interrupt (general enable interrupt)
+13	EXTER	6 ($78)	External interrupt, connected to the INT6 line
+12	DSKSYN	5 ($74)	Generated if the DSKSYNC register matches the data 
+			read from the disk into the drive. Used for hardware
+			loaders.
+11	RBF	5 ($74)	Serial Port Receive UART Buffer FULL.
+10	AUD3	4 ($70)	Reading of a block of data from audio ch. 3 over.
+09	AUD2	4 ($70)	Reading of a block of data from audio ch. 2 over.
+08	AUD1	4 ($70)	Reading of a block of data from audio ch. 1 over.
+07	AUD0	4 ($70)	Reading of a block of data from audio ch. 0 over.
+06	BLIT	3 ($6c)	If the blitter has finished a blitt it is set to 1
+05	VERTB	3 ($6c)	Generated every time the electron brush is at line 00, 
+			i.e. at every start of a vertical blank.
+04	COPER	3 ($6c)	It can be set with copper to generate it at a certain 
+			video line. Just request it after a certain WAIT.
+03	PORTS	2 ($68)	Input/Output Ports and timers, connected to INT2 line
+02	SOFT	1 ($64)	Reserved for software initiated interrupts.
+01	DSKBLK	1 ($64)	End of data block transfer from disk.
+00	TBE	1 ($64)	Serial Port Transmit UART Buffer EMPTY.
+
+As you can see, the analogy with DMACON / DMACONR is evident:
+-Bit 15 is very important: if it is lit then the bits set to 1 for writing in
+ $dff09A are used to enable the related interrupts, if bit 15 is at 0, then 
+ the other bits at 1 in the register are used to disable, i.e. mask, the 
+ related interrupts.
+ To enable or disable one or more interrupts, as in DMACON, it is however 
+ necessary to set the relative bits to 1; what determines whether those 
+ interrupts must be enabled or disabled is bit 15: if it is at 1 they are 
+ enabled, while if it is at 0 they are switched off (always independently of 
+ their previous status).
+ Let's say that you choose which bits to OPERATE on, then you decide whether 
+ to activate them (0) or deactivate them (1) based on bit 15. Bit 0 is neither 
+ set nor cleared.
+
+ Let's take an example:
+		;5432109876543210
+	move.w #%1000000111000000,$dff09A ; bits 6,7 and 8 are ENABLED
+		;5432109876543210
+	move.w #%0000000100100000,$dff09A ; bits 5 and 8 are DISABLED.
+
+-Bit 14 acts as a general switch (as does bit 9 in the DMACON).
+ It can be reset, for example, to temporarily disable all interrupt levels, 
+ without having to reset the entire register.
+
+You will remember the old Lesson3a.s that with a:
+
+	MOVE.W	#$4000,$dff09a	; INTENA - Stop interrupts
+
+All interrupts were blocked, while with:
+
+	MOVE.W	#$C000,$dff09a	; INTENA - Re-enable interrupts
+
+				   ;5432109876543210
+All were re-enabled. Well, $4000 = %0100000000000000, that is the  MASTER bit 
+is reset to zero, the 14. Instead $c000 = %1100000000000000, that is, the 
+MASTER bit is re-enabled, and with it all the interrupts. In Lesson11b.s to 
+enable VERTB:
+
+	move.w	#$c020,$9a(a5)	; INTENA - I enable level 3 "VERTB" interrupt
+				; ($6c), the one that is generated once per
+				; frame (at line $00).
+
+	       ; 5432109876543210
+Indeed, $c020 = %1100000000100000 - bit 5, VERTB, set together with the MASTER.
+
+As you may have noticed, interrupts range from managing the serial port to 
+reading the synchrony of the disk drive tracks, without sparing either blitter 
+or CIA or COPPER. Redefine all interrupt levels is very dangerous from the 
+point of view of compatibility, and it is also very difficult and specific to 
+those who want to build their own operating system.
+
+Demo and game programmers are only interested in interrupt $ 6c, i.e. the 
+level 3 interrupt, which concerns the generation of interrupts synchronized 
+with the electronic brush (VERTB - bit 5), or which can be generated in 
+particular video lines with copper (COPER - bit 4). More rarely it may happen 
+that you have to deal with interrupts for keyboard management or other.
+
+In particular, loading from disk via hardware loader is out of fashion, 
+because it is necessary to make games and demos that can be installed on the 
+hard disk, so the disk drive interrupts will not interest us. Furthermore, 
+even if you want to make a game that uses the serial port to play in double on 
+2 computers connected by cable or via modem, it would be better to use the 
+legal calls from the SERIAL.DEVICE operating system, instead of making 
+interrupts that are not very compatible with any multiserial cards or new 
+hardware.
+				 .
+				      ·
+				 :    :
+				 ¦    ¦
+				_|    l_
+				\      /
+				 \    /
+				  \ _!_
+				   \/¡
+
+*******************************************************************************
+*			HOW INTREQ AND INTREQR ARE USED			      *
+*******************************************************************************
+
+In Lesson11b.s we have also seen INTREQ / INTREQR. What is it about?
+You may have noticed how the $6c interrupt is structured:
+
+MioInt6c:
+	btst.b	#5,$dff01f	; INTREQR - bit 5, VERTB, is cleared?
+	beq.s	NointVERTB		; If so, it's not a "real" int VERTB!
+	movem.l	d0-d7/a0-a6,-(SP)	; save the registers on the stack
+	bsr.w	mt_music		; I play music
+	movem.l	(SP)+,d0-d7/a0-a6	; I take the reg. from the stack
+nointVERTB:	 ;6543210
+	move.w	#%1110000,$dff09c ; INTREQ - cancel rich. BLIT, COPER, VERTB
+				; since the 680x0 does not erase it by
+				; itself!!!
+	rte	; exit from int COPER / BLIT / VERTB
+
+
+NOTE: INTREQR is the word $dff01e/1f. In this case we act on its byte $dff01f 
+      instead of on $dff01e, but it is always the low byte of INTREQR.
+
+The map of INTREQ / INTREQR is the same as that of INTENA / INTENAR:
+
+INTREQ/INTREQR ($dff09c/$dff01e)
+
+BIT	NAME	 LEV.	DESCRIPTION
+
+15	SET/CLR		"Set / Clear" control bit. Determines if the 1-bits 
+			must be cleared or set, as in DMACON.
+			Bits = 0 will not be set or reset
+14	INTEN	6 ($78)	interrupt level 6 CIAB
+13	EXTER	6 ($78)	External interrupt, connected to the INT6 line
+12	DSKSYN	5 ($74)	Generated if the DSKSYNC register matches the data 
+			read from the disk into the drive. Used for hardware
+			loaders.
+11	RBF	5 ($74)	Serial Port Receive UART Buffer FULL.
+10	AUD3	4 ($70)	Reading of a block of data from audio ch. 3 over.
+09	AUD2	4 ($70)	Reading of a block of data from audio ch. 2 over.
+08	AUD1	4 ($70)	Reading of a block of data from audio ch. 1 over.
+07	AUD0	4 ($70)	Reading of a block of data from audio ch. 0 over.
+06	BLIT	3 ($6c)	If the blitter has finished a blitt it is set to 1
+05	VERTB	3 ($6c)	Generated every time the electron brush is at line 00, 
+			i.e. at every start of a vertical blank.
+04	COPER	3 ($6c)	It can be set with copper to generate it at a certain 
+			video line. Just request it after a certain WAIT.
+03	PORTS	2 ($68)	Input/Output Ports and timers, connected to INT2 line
+02	SOFT	1 ($64)	Reserved for software initiated interrupts.
+01	DSKBLK	1 ($64)	End of data block transfer from disk.
+00	TBE	1 ($64)	Serial Port Transmit UART Buffer EMPTY.
+
+
+What is an interrupt request register for?
+To request interrupts, of course. And also to DISDIRECT them, given that once 
+an interrupt is requested, automatically (from the custom chips) or manually 
+(from our program), this interrupt is executed, but the "request" is not 
+canceled, so at the end of each interrupt it is necessary to delete the 
+interrupts already carried out from the list of interrupts to do.
+
+The INTREQ ($dff09c) is used by the 680x0 to force the execution of an 
+interrupt, usually the software interrupt, or by the COPPER to execute the 
+COPER interrupt on a certain video line. Of course, once an interrupt request 
+has been set, if this interrupt is not enabled in INTENA, it can also wait a 
+lifetime.
+
+When a bit set in INTREQ is simultaneously set also in INTENA, the interrupt 
+corresponding to that bit occurs.
+
+Attention to the particularity that if the bit 14 of INTREQ is set, a level 6 
+interrupt occurs (provided that the corresponding bit in INTENA, Master Enable, 
+is also set)
+
+Otherwise it is used to clear interrupt request bits already executed, since 
+interrupt requests are not cleared automatically.
+
+Be careful with this fact, because if you forget to clear the request bits at 
+the end of each interrupt executed, the processor will execute it again !! Now 
+you should understand the final part of the interrupt:
+
+		 ;6543210
+	move.w	#%1110000,$dff09c ; INTREQ - cancel rich. BLIT, COPER, VERTB
+				; since the 680x0 does not erase it by itself!!!
+	rte	; exit from int COPER / BLIT / VERTB
+
+
+INTREQR ($dff01e) is read-only, as opposed to INTREQ which is write-only. It is 
+used to know which chip requested the interrupt. In fact, if the level 3 
+interrupt ($6c) is executed, it can be "the fault" of the blitter, the vertical 
+blank or the copper. By testing the INTREQR bits we understand which of these 3 
+is the cause, and we determine which routine to execute, or whether to execute 
+the routine, in case we only care about one of these 3 eventualities. Bit 15 
+has no meaning in the INTREQR, since it is the Set / Clr.
+
+Let's now review the use made in Lesson11b.s:
+
+	btst.b	#5,$dff01f	; INTREQR - bit 5, VERTB, is cleared?
+	beq.s	NointVERTB	; If so, it's not a "real" int VERTB!
+
+In this case, since the BTST on an address can only be .BYTE, the $dff01f, that 
+is the low byte of the word, is tested instead of the $dff01e.
+In case you jump to Noint, it is evident that the interrupt was generated by 
+the copper or by the blitter, and bits 4 or 6 would be set.
+In this regard, it is also necessary to cancel these interrupt requests, to 
+avoid returning every microsecond to execute the interrupt for nothing:
+
+		 ;6543210
+	move.w	#%1110000,$dff09c ; INTREQ - cancel rich. BLIT, COPER, VERTB
+				; since the 680x0 does not erase it by itself!!!
+	rte	; exit from int COPER / BLIT / VERTB
+
+It will seem strange to you that, despite only INTENA VERTB being enabled, it 
+may happen that COPER or BLIT interrupts are requested and EXECUTED.
+
+Indeed they should not be requested, nor performed...
+
+But for reasons probably related to the MMU or the processor speed, on 
+computers faster than the base 1200, such as the A4000, it can happen very 
+well, and this in fact causes problems with demos, even some recent ones for AGA.
+
+In fact, on A1200 base it can happen that the interrupt works even without the 
+btst of the VERTB bit, but on a accelerated A4000 or A1200 this is not the 
+case. I admit that "in theory" it should work, but the fact is that many demos 
+for the A1200, when run on the A4000, play the music 2 times per frame, and are 
+ridiculous.
+
+So be categorical in always testing the intreq bits before running the 
+interrupt, even if everything works on your computer, or you will find yourself 
+with a game / demo that makes a fuss about a4000 and company.
+
+To summarize, here are the things to do to set our interrupt:
+
+- Get the address of the VBR, save the old interrupt and reset it before 
+  exiting. This task is done well by startup2.s, no problem: the VBR address is 
+  in the BaseVBR label.
+- Reset all interrupts with INTENA. This task is also performed by startup2.s, 
+  with a MOVE.W #$7fff,$9a(a5).
+- Put our interrupt address in the right autovector.
+- Enable only the interrupt, or the interrupts we need
+
+And here's what to remember to put in our interrupt routine:
+
+- Save and restore all the registers with a nice MOVEM, since if you "polluted" 
+  some registers, imagine what would happen at the end of the interrupt, when 
+  you go back to running an interrupted program in who knows what situation and 
+  with who knows what values in the registers!
+- Test the $dff01e/1f (INTREQR) right away, to find out who or what triggered 
+  an interrupt of that level. For example, a level 3 interrupt can be generated 
+  by COPER, VERTB, or BLITTER; a level 4 interrupt from AUD0, AUD1, AUD2 or 
+  AUD3, etc. Beware of the fact that even if it sometimes seems to work without 
+  this test, on A4000 or similar everything will go out of phase as if the CPU 
+  were drunk (this can be a special effect, though!)
+- Clear the bits of INTREQ ($dff09c) that caused the interrupt executed, as 
+  they are not cleared automatically. If you forget to do this the processor 
+  will have the fixed interrupt request and will run continuously.
+- Terminate the interrupt with an RTE, just as you terminate a subroutine with 
+  RTS.
+
+In light of these considerations, I propose again the first interrupt:
+
+MioInt6c:
+	btst.b	#5,$dff01f	; INTREQR - bit 5, VERTB, is cleared?
+	beq.s	NointVERTB	; If so, it's not a "real" int VERTB!
+	movem.l	d0-d7/a0-a6,-(SP)	; save the registers on the stack
+	bsr.w	mt_music		; I play music
+	movem.l	(SP)+,d0-d7/a0-a6	; I take the reg. from the stack
+nointVERTB:	 ;6543210
+	move.w	#%1110000,$dff09c ; INTREQ - cancel rich. BLIT, COPER, VERTB
+				; since the 680x0 does not erase it by itself!!!
+	rte	; exit from int COPER / BLIT / VERTB
+
+                                  ||||   
+                              <---/oO\--®® 
+._________________________________\--/________________________________________.
+*******************************************************************************
+*		INTERRUPTS AND THE OPERATING SYSTEM			      *
+*******************************************************************************
+
+The 680x0 has only 7 levels of INTERRUPT, but then how is it possible that the 
+interrupts in practice are 15? Well, the Paula chip takes care of dividing the 
+7 "real" interrupt levels into pseudo-interrupts. For example, it jumps to the 
+level 3 interrupt in three cases: COPER, VERTB and BLIT, and the only way to 
+know which of these three eventualities generated the interrupt is to consult a 
+register connected to the Paula chip itself, i.e. INTREQR!
+
+On the other hand, since there are only 7 "real" interrupt levels of the 680x0, 
+it is not possible that interrupts "split" by Paula of the same level can 
+interrupt each other. While a level 5 interrupt, such as DSKSYNC, can interrupt 
+the execution of a level 3 interrupt, such as COPER, it is not possible for 
+BLIT to interrupt COPER, even if it has higher "Paulesca priority", since they 
+are in the same physical layer of 680x0.
+
+For this reason, if during the execution of an interrupt an interrupt request 
+occurs from another Paula psoudolevel in the same 680x0 level, such as a BLIT 
+while executing a COPER, at the end of the int that the COPER executes the 
+level 3 interrupt will be executed again immediately, this time by executing 
+the COPER routine (according to the btst done on the INTREQR it will be 
+identified which type of "subint" to execute).
+
+Here are the priorities of the interrupt levels in the operating system, i.e. 
+in the Exec.library, which as you can see follows the hardware priority:
+
+
+	level1: ($64)		MINIMUM PRIORITY
+
+	1	empty transmission buffer	TBE
+	2	disk block transferred		DSKBLK
+	3	software interrupt		SOFTINT
+
+	level2: ($68)
+
+	4	external ports INT2 & CIAA	PORTS
+
+	level3: ($6c)
+
+	5	copper				COPER
+	6	interval of vertical blanking	VERTB
+	7	blitt finished			BLIT
+
+	level4: ($70)
+
+	8	audio channel 2			AUD2
+	9	audio channel 0			AUD0
+	10	audio channel 3			AUD3
+	11	audio channel 1			AUD1
+
+	level5: ($74)
+
+	12	receive buffer full		RBF
+	13	disk sync found			DSKSYNC
+
+	level6: ($78)		HIGHEST PRIORITY
+
+	14	external INT6 & CIAB		EXTER
+	15	special (master enable)		INTEN
+
+	level7: ($7c) (external cards such as Action Replay)
+
+	-	non-maskable interrupt		NMI
+
+The fact that the operating system handles its own interrupt routines makes it 
+more dangerous for us to replace some of them.
+
+As for priority 6, the graphics.library uses the CIAB Time Of Day (TOD) timer 
+interrupt to control the screen.
+
+In priority 5, DSKSYNC is used by the TrackDisk and RBF by the serial.device.
+
+In level 4, there are the audio channels, used by the audio.device.
+
+In level 3, the BLIT interrupt, which occurs when the blitter has finished an 
+operation, routines are often put in place to reuse the data just written by 
+the blitter, to avoid wasting time.
+
+In layer 2, of the CIAA chip, the Timer.device uses the TimerA interrupt for 
+the keyboard handshake, the TimerB for the microsecond timer, and the 50 / 60Hz 
+TOD alarm interrupt. There is also INT2 for any external hardware cards.
+
+Nand level 1, the lowest, the TBE interrupt is used by the Serial.device, the 
+DSKBLK interrupt is used by the TrackDisk.device. SOFTINT interrupts, ie 
+software, can be defined via the operating system, for example with the Cause 
+function of the Exec or by making a message port of the SOFT_INT type.
+
+*******************************************************************************
+*		THE COPPER INTERRUPTS CALLED BY COPPERLIST		      *
+*******************************************************************************
+
+If you want to call the level 3 COPER interrupt ($6c) on a certain video line, 
+just write $8010 in the intreq ($dff09c), after a wait for that video line:
+
+COPPERLIST:
+	dc.w	$100,$200	; BPLCON0 - no bitplanes
+	dc.w	$180,$00e	; color0 BLUE
+	dc.w	$a007,$fffe	; WAIT - wait for line $a0
+	dc.w	$9c,$8010	; INTREQ - I request a COPER interrupt, which 
+				; makes it act on color0 with a "MOVE.W".
+	dc.w	$FFFF,$FFFE	; Fine della copperlist
+
+In fact, the value $8010 = $8000 + %10000, i.e. bit 4, COPER is set.
+
+Let's see a practical example in Lesson11c.s.
+
+Of course, the interrupt can also be called to different lines, each time 
+changing "effect". Let's check it in Lesson 11d.s
+
+Given the particular complexity of interrupts, for now we will not give further 
+examples, regarding interrupts of disks, of the serial port, etc.
+
+For the applications we are interested in, that is DEMO and GAMES, only the 
+two types of level 3 interrupts ($6c) that we have seen are often enough, 
+namely the VERTB, which is executed every frame, and the COPER, which can be 
+recalled from the copper on any video line.
+
+The applications of the other interrupts will be commented out as they are 
+found in the example listings, as they range in every field!
+
+For now, we can anticipate the use of all interrupt levels:
+in the listings Lesson11e.s and Lesson11f.s ALL interrupts are redefined, and 
+ALL levels are enabled, but of course there are routines only in level 3. This 
+example can be useful as a "starting point" to define any interrupt level: you 
+can "cut out "the level that interests you and put the routines" inside ".
+
+   ·          .   .                   .         .               .    .
+        .              .             .       .           .               .
+   .             .            .  .       .        .
+       .           .    ,----|     .   _ _ _ _ _           .      .
+            .         . `----|,----|   ]-I-I-I-[       .     .   _ _ _  _ _ _
+     _ _ _ _ _ _ ,----|      |`----| . \_`_ '__/      .          ]-I-I--I-I-[
+     ]-I-I-I-I-[ `----|  .   |     |    |. `  |.                  \_`__  '_/
+      \ `   '_/       |     /^\  . |    | /¯\ |           .        |~_ [],|
+       [¯] `__|       |    /  ^\   |    | |_| |     _ _ _  _ _ _  _|______|_
+       |__   ,|      /^\  /  ^  \ /^\   | === |     I-I-I--I-I-I <=-=-==-=-=>
+    ___| ___ ,|__   /-=-\/=_=_=_=\-=-\  |, `_ |     \ ` `  ' ' /  \__   _'_/
+   (__I__I_I__I_ ) (====(_________)___)_| ___ |__    | çÅ$t£e |    |.   _ |
+    \-\--|-|--/-/  |     I  [ ]  I  (  I|_I I |I )  _|____ ___|_   |   _  |
+     |[] `    '|_  |_   _|`__  ._[  _\ \  | | / /  <=-=- øF -=-=>  |`    '|
+    / \  [] ` .| |-| |-| |_| |_| |_| | []   [] |  /\\__ ___ ___/   | '    |
+   <===>      .|-=-=-=-=-=-=-=-=-=-=-|  , ,   / \/  \|.    .  | /\ |[]    |
+   |[ ]|` ` [] | .   _________   .   |-    , <=======|¦££u$¦øN|<==>|'   __|
+   <===>  `  ' ||||  |       |  |||  |  []   <=======|        ||  || '  I-|
+    \T/     -- ||||  | çOi!  |  |||  | .  '   \T/--T-T-T-T-T-T|T-T||__.   |
+  __/|\   .   .||||| |       | ||||  |. . ¯¯. /|\__|_|_|_|_|_|||_|/ çO¦!`¶4\_
+  ¯¯ : \       ||||! ! _o ,  |  ||!  |       / | \ ! ! ! | !.!|  /     ¦    ¯
+     ¦  \      !||!   //\/   |  |!   |       \ | /       !   !| /      :
+     :          `!   '/\     !  !    !        \!/             !      __¦__
+___ _|_______________/ /_  /\________________________________________\  //_ ___
+¯¯¯ ¯|¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯\/  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯\//¯¯ ¯¯¯
+     :                                                                 ¦
+
+*******************************************************************************
+*   ADVANCED COPPER INFORMATION - USE OF COLOR0 ONLY ($180) - NO BITPLANES   *
+*******************************************************************************
+
+As the title states, we will now see the possible applications using only a 
+copperlist without bitplanes. That is to create drawings or animations with 
+only WAIT and MOVE.
+
+Of course, if you add bitplanes you can "cross" and "overlap" these effects, 
+changing color2 or color3, in addition to color0, many times per copperlist.
+
+To begin, however, we need to explain things that have not yet been covered. 
+This is the "time" it takes for the copper to execute its MOVE command. We 
+have already seen how to change the entire palette, even of 32 colors, to a 
+certain video line, to make a few hundred colors appear on the screen, with 
+only "32" or "16" colors officially set in BPLCON0. Well, in a line we were 
+able to change 32 colors, that is to execute 32 MOVE of the copper:
+
+	dc.w	$180,xxx	; 1 move in color0
+	dc.w	$182,xxx	; 1 move in color1
+	...			; etc.
+
+Well, actually if we start changing the colors from the horizontal position 
+$07, or even $01, all 32 colors will actually be changed only towards the 
+middle of the screen, because each move requires 8 pixel lowres to be 
+performed. This is why it is always advisable to change the colors 1 line 
+before the drawing really begins. If we put fifty MOVEs in a row, we would 
+arrive with the last one on the line below!
+
+On the other hand, it would be physically impossible to perform dozens of 
+moves in less than 1 fiftieth of a fiftieth of a second!
+
+However we can use this apparent limitation for our purposes, for example to 
+change color horizontally every 8 pixels, without using WAITs, but simply 
+placing fifty COLOR0s side by side per line. Let's see a practical example of 
+this in Lesson11g1.s
+
+One use of this listing could be to change the $182, and not the $180, in a 1 
+bitplane screen: in this way any superimposed "text" would be faded from left 
+to right instead of top to bottom, as we usually do with the copperlist.
+
+In Lesson11g2.s and Lesson11g3.s there are more colorful versions of this 
+effect, so much so that they can be a basis for "PLASMA" effects.
+
+By the way, if we "rotated" or "cycled" the colors of a line of this type, 
+what would we have? A well-known effect, used by the intros already in the 
+early days of the Amiga: we see the "supercar" effect in Lesson11g4.s
+
+Perhaps cycling only 2 lines does not enhance. Let's try to cycle more, 
+perhaps making a "knotted" effect, in Lesson11g5.s
+
+Another "fantasy" that takes advantage of the "crowding" of colorXX put below, 
+in the example Lesson11g6.s
+
+Now let's see a "cheap" way to make a plasma-like: instead of changing the 
+contents of the many color0s, we put a wait at the beginning of each line, 
+each of which will contain 52 color0: we can simply move the line left and 
+right changing the horizontal position of the various waits! Basically this is 
+in Lesson11g7.s
+
+* USE OF THE COPPER2 (COP2LC/COPJMP2):
+
+You may have noticed that in addition to the $dff080 and $dff088 to point and 
+start copper 1, there are the $dff084 and $dff08a to point and start copper2. 
+But how does copper2 work? And what can it do for us?
+
+Each start of the frame the copper starts copper 1, the address of which is 
+read by the $dff080.
+
+Sometimes we start it "on the fly", without even waiting for the end of the 
+frame, by writing in COPJMP1, that is $dff088.
+If we put a copperlist in $dff084, (COP2LC), we would also have to start it by 
+writing in COPJMP2 ($dff08a).
+
+But at the end of the frame copper1 would restart.
+
+Now, this feature can be used to make several copperlists to jump to, as we do 
+for 680x0 instructions with "JMP".
+For example, if we wanted to run copper1 up to half the screen, then jump to 
+run the other half from copper 2, it would be enough to point copper 2 at the 
+beginning, and start it from the copperlist using copjmp2:
+
+
+	move.l	#copper1,$dff080	; COP1LC
+	move.l	#copper2,$dff084	; COP2LC
+	...
+	
+	section	copperissime,data_C
+
+copper1:
+	...	; various instructions...
+	dc.w	$a007,$fffe	; Wait for line $a0
+	dc.w	$8a,0		; COPJMP2 - start the copper 2
+
+
+copper2:
+	...	; various instructions
+	dc.w	$ffff,$fffe	; End of copperlist, we will restart with 
+				; copper1!
+
+
+The copper, arrived at "dc.w $8a,0" jumps (like BRA or JMP) to copper2, 
+provided that this was put in $dff08a beforehand. Note that it SKIPs, and it 
+doesn't act as a "bsr", so it never goes back under the copper1 "dc.w $8a,0".
+
+Now let's see a couple of practical uses of copper2. One is to do the 
+so-called copper dynamics, that is composed of 2 copperlists exchanged every 
+frame, like a "double buffering" of the bitplanes. This is to make the shades 
+"smoother", in fact if you swap 2 colors every frame, you will have an effect 
+like interlace, which will make the intermediate color "visible".
+
+Just prepare 2 copperlists with the same shade, but a little "out of phase", 
+and swap them continuously.
+
+Let's see in practice a Dynamc Cop in Lesson11h1.s
+
+Have you noticed the difference? You can pass it off as an AGA shade!
+And to say that dynamic copper has been used in a few games, although it is 
+not that difficult to do. Among the games that have dynamic copper I must 
+remember AGONY, and the recent SHADOW FIGHTER, the Italian fighting game of 
+the NAPS TEAM.
+
+Now let's see another application of copper2. Instead of swapping a couple of 
+copperlists, we can cycle a few dozen of them, so we can say that you can 
+"pre-calculate" a copper effect by calculating 1 copperlist for each "phase" 
+of the effect: since the effect will then be cyclic, just point every time to 
+the copperlist "after".
+
+In this way we get the copper effect, but in terms of time we save TOTALLY 
+what would have been used by the 68000 routines! So we can say that the copper 
+effect in question is "FREE", and we can run a routine that eats all the rest 
+of the time.
+
+Let's see a "normal" routine, in Lesson11h2.s, and the version that 
+pre-calculates the "copper" frames, that is, Lesson11h3.s. The only drawback 
+of the "troubled / precomputed" version is that it needs additional memory to 
+store all copperlist-frames.
+
+Since you want to pass the copper level 2 exam, you should also know that you 
+can "mask" the Y coordinate of WAITs. In practice, a wait with a masked Y 
+looks like this:
+
+	dc.w	$0007,$80FE	; Wait ad Y "mascherata"
+
+And it means: do not check line Y, but wait for the $07 X position of the 
+current line. It is a "handicapped" WAIT, who cannot read the Y position.
+
+Actually it can't read the low 7 bits of the Y position, so it works after 
+line $80. But then, why do we need a masked wait that does not check the Y 
+position before the Y $80 position?
+
+If we had to move a legendary bar, like those of lesson 3, we would have to 
+change all the waits that compose it. If instead we put a normal wait at the 
+beginning, and under all the masked waits, it will be enough to change the 
+first wait and the others will "follow". The saving of 680x0 instructions is 
+evident: with a single add / sub you can move an entire bar.
+
+Let's see an implementation in Lesson11h4.s (legendary bar of Lesson3!)
+
+Note that it also works below the $FF vertical line, as the numbering starts 
+at $00 again. Now that you know, if you happen to move something in that area 
+you can use this trick.
+
+Now we could talk about the SKIP instruction, but since I've never seen it 
+used by anyone, and I myself don't see what it can do (you can easily do all 
+things using copper2 for jumps ...), I leave out this argument, I hope you 
+believe in the total uselessness of this command.
+
+Now, to finish the topic "ONLY COPPER WITHOUT BITPLANES", I propose 6 listings 
+that summarize the most common effects of this type.
+
+Lesson11i1.s is a full-screen color scroll
+
+Lesson11i2.s is a pseudo parallax with 3 levels of bars. It can serve as a 
+background for a platform game during a "climb", for example.
+
+Lesson11i3 is a fantasy in COP minor...
+
+Lesson11i4.s is a pseudorandom gradient, which mixes the values of the 
+horizontal position of the electronic brush (usually different values), to 
+make the colors of the copper gradient.
+
+Lesson11i5.s is a copperlist that cycles colors in a way that looks 3d.
+
+		                 .......
+		              .::::::::::.
+		       _______j::'__ __:::,__
+		     _/¯     /. .-^-.-^-.¯\ ¬\_
+		    /        \_ | ® | © |_/    \
+		   /      __  T `---'\--'!      \
+		  /     __/`  |  ¯¬ _ \¬ \       \
+		 /     _/     | _/\ ¬_/ _,\       \
+		(      '\     | `  ¯¯ ¯Y   \       \
+		 \       \    l____________/        \
+		  \      7________________\_        /
+		   \     l       ____      (       /
+		    \_____\       ¬T       /______/
+		     /    \        |       /    /
+		    C _ _ ( __     |   __ ( _ _(
+		     ¯ T ¯   ¬     |   ¯   T ¯ ¯
+		      /¯           ¯\      ¯\ xCz
+		  ___/_______________\_______\__
+		 (________________)_____________)
+
+
+*******************************************************************************
+*	    ADVANCED COPPER INFORMATION - EVEN BITPLANES ENABLED	      *
+*******************************************************************************
+
+Have you seen that with the copper move & wait alone we can do a lot of 
+things? But what if we make complicated copperlists with bitplanes enabled? We 
+can change the bplmod at each line to lengthen the figures, or use the bplcon1 
+($dff102) to wave them, or even change the pointers to the bitplanes at each 
+line !!!
+
+In the following listings, among other things, a particular system is used to 
+calculate the diwstart / diwstop, and ddfstart / ddfstop, ie through some 
+EQUATE, which are used to calculate the values thanks to the shift operators 
+"<<" and ">>", as well as "&" (and), and the common "*", "/", "+", "-".
+
+If you want to make a normal 320 * 256 screen, you first have to put the 
+normal values, or change them by hand. If, on the other hand, you want to make 
+a screen of a particular size, for example 256 * 256, it can save time.
+
+
+scr_bytes	= 40	; Number of bytes for each horizontal line.
+			; From this one calculates the width of the screen, 
+			; multiplying the bytes by 8: screen norm. 320/8 = 40
+			; Eg for a 336 pixel wide screen, 336/8 = 42
+			; widths example:
+			; 264 pixel = 33 / 272 pixel = 34 / 280 pixel = 35
+			; 360 pixel = 45 / 368 pixel = 46 / 376 pixel = 47
+			; ... 640 pixel = 80 / 648 pixel = 81 ...
+
+scr_h		= 256	; Screen height in lines
+scr_x		= $81	; Screen start, position XX (normal $xx81) (129)
+scr_y		= $2c	; Screen start, position YY (normal $2cxx) (44)
+scr_res		= 1	; 2 = HighRes (640*xxx) / 1 = LowRes (320*xxx)
+scr_lace	= 0	; 0 = non interlace (xxx*256) / 1 = interlace (xxx*512)
+ham		= 0	; 0 = non ham / 1 = ham
+scr_bpl		= 1	; Number of Bitplanes
+
+; automatically calculated parameters
+
+scr_w		= scr_bytes*8		; screen width
+scr_size	= scr_bytes*scr_h	; screen size in bytes
+BPLC0	= ((scr_res&2)<<14)+(scr_bpl<<12)+$200+(scr_lace<<2)+(ham<<11)
+DIWS	= (scr_y<<8)+scr_x
+DIWSt	= ((scr_y+scr_h/(scr_lace+1))&255)<<8+(scr_x+scr_w/scr_res)&255
+DDFS	= (scr_x-(16/scr_res+1))/2
+DDFSt	= DDFS+(8/scr_res)*(scr_bytes/2-scr_res)
+
+Then, in copperlist we will put:
+
+	dc.w	$8e,DIWS	; DiwStrt
+	dc.w	$90,DIWSt	; DiwStop
+	dc.w	$92,DDFS	; DdfStart
+	dc.w	$94,DDFSt	; DdfStop
+	dc.w	$100,BPLC0	; BplCon0
+
+However, it is not "foolproof", if you want to make screens of weird sizes it 
+may not work, and it will be better to go "by hand".
+
+You can also use it to calculate the value, checking it after assembly with "? 
+DIWS" or "? Xxxx", then write the value by hand.
+
+Here are the listings of this section:
+
+Lesson11l1.s - change both color0 and bplcon1 ($dff102) for each line, causing 
+the bitplanes to ripple.
+
+Lesson11l2.s - 3 out of 4 colors are changed for each line (2 bitplanes).
+
+Lesson11l3a.s, Lesson11l3b.s and Lesson113c.s are 3 steps to get to make the 
+effect of swaying the AMIGA ET logo of the small demo present in disk 1. By 
+dint of pieces we have described all of it!
+
+The figure sways thanks to the negative modulos alternating with the zeroed 
+ones.
+
+Lesson11l4.s - This is another way to sway: the bplpointers at each line are 
+redefined!
+
+Lesson 11l5.s - If you had a small image 40 * 29 pixels wide, and you wanted 
+to fill the whole screen, what could you do? Try zooming 8 times, turning it 
+into 320 * 232. this is what this listing does, using the modulo for the 
+vertical elongation, a routine that tests each bit and "transforms" it into a 
+byte (8 bits) for the horizontal one.
+
+Lesson11l5b.s - is an optimized version of the previous listing, which uses a 
+table containing the 256 possible combinations of an 8-byte "expanded" byte. 
+Takes less than half the time to perform! Learn to do this kind of 
+optimizations: routines that would seem impossible to speed up, can sometimes 
+be accelerated like this!
+
+* HOW TO MAKE AN INTERLACED SCREEN (512 lines high)
+
+The interlaced mode allows you to view twice as much video data.
+This is possible by doubling the number of lines displayed.
+Usually 256 vertical lines are possible, while with the interlace it is 
+possible to reach 512, both in lowres and in hires.
+However, there are some peculiarities, in fact it is not enough to point the 
+bitplanes and set the interlace bit (bit 2 of bplcon0).
+
+As for the RAW image, just convert a normal interlaced drawing with the 
+iffconverter and save it, i.e. a figure in 320x512 or 640x512. Even a smaller 
+brush is fine, but always consider that the image must not be "squashed" for 
+double vertical resolution. As is known, the interlaced "flickers", "wobbles".
+
+This is bad, but also good, in fact on normal TVs or monitors a vertical 
+resolution greater than 256 lines would not be possible, a "VGA" monitor would 
+be needed, ie multisync or multiscan.
+
+The "trick" is done by displaying only the 256 odd lines once, and the other 
+256 even lines once.
+
+The exchange takes place every frame so it deceives the eye decently, apart 
+from the flickering, (which, if the colors are well chosen, decreases a lot).
+
+This exchange, however, is not entirely "automatic", we need to do a little 
+something "by hand".
+
+  +-----------------------------------+----------------------------------+
+  |      TABLE 1 (odd lines)          |        TABLE 2 (even lines)      |
+  +-----------------------------------+----------------------------------+
+  | LINE 1: ---> xxxxxxxxxxxx         |                                  |
+  |                                   |       LINE 2: ---> xxxxxxxxxxxx  |
+  | LINE 3: ---> xxxxxxxxxxxx         |                                  |
+  |                                   |       LINE 4: ---> xxxxxxxxxxxx  |
+  | LINE 5: ---> xxxxxxxxxxxx         |                                  |
+  |                                   |       LINE 6: ---> xxxxxxxxxxxx  |
+  | LINE 7: ---> xxxxxxxxxxxx         |                                  |
+  |                                   |       LINE 8: ---> xxxxxxxxxxxx  |
+  | LINE 9: ---> xxxxxxxxxxxx         |                                  |
+  |                                   |       LINE 10: --> xxxxxxxxxxxx  |
+  |          [...]                    |                                  |
+  |                                   |                 [...]            |
+  | LINE 311: -> xxxxxxxxxxxx         |                                  |
+  |                                   |       LINE 312: -> xxxxxxxxxxxx  |
+  | LINE 313: -> xxxxxxxxxxxx         |                                  |
+  +-----------------------------------+----------------------------------+
+
+For the interlaced mode it is necessary to redefine the modulo by putting it 
+at 40 if we are in lowres, or at 80 if we are in hires. In practice it is 
+necessary to put the length of a line in the modulo, to skip it: since the 
+modulo is a value that is added to the end of each video line, if we skip the 
+length of an entire line, this is what happens: the first line is read and 
+displayed, at the end the second is skipped, and the third is displayed below; 
+at the end of this a line is skipped and the fifth line is displayed, and so 
+on. Basically we have made sure that only the odd lines are displayed.
+
+For hardware reasons the screen can not display more than 256 lines, but no 
+one dictates which 256, nor when to start displaying them.
+
+If we skip the even lines once, and skip the odd lines next, we can see a 512 
+line screen in an "alternating" 256 line!
+
+Let's review: we have a pic, for example, in interlaced 640x512, which we have 
+converted to RAW and we want to display. We pointed the pic appropriately and 
+put the modulo at -80, as well as set the interlace bit (in addition to that 
+of hires) in bplcon0 ($dff100).
+
+What do we get? THE IMAGE AS IT WAS IN LOWRES! 256 LINES HIGH, AS IF WE 
+LOWERED IT IN RESOLUTION!
+
+So, here is the time to do that little part "by hand" to allow interlacing. 
+There is a special bit, which must be checked, which tells us whether to 
+display the odd or even lines for each frame.
+This is bit 15 of the VPOSR ($dff004), called LOF, or Long Frame, which 
+indicates whether we are in the "long frame" or not. Here is a routine example:
+
+LACEINT:
+	MOVE.L	#BITPLANE,D0	; Bitplane address
+	btst.b	#15-8,$dff004	; VPOSR LOF bit?
+	Beq.S	Faidispari	; If so, it's the odd lines up
+	ADD.L	#80,D0		; Or add the length of one line, starting the 
+				; display from the second: display even lines!
+FaiDispari:
+	LEA	BPLPOINTERS,A1	; PLANE POINTERS IN COPLIST
+	MOVE.W	D0,6(A1)	; Point the image
+	SWAP	D0
+	MOVE.W	D0,2(A1)
+	RTS
+
+As you can see, if the LOF bit is set to zero, the display starts from the 
+first line, so as a result of the modulo, the lines 1,3,5,7 ... etcetera, that 
+is the odd ones, will be displayed. Otherwise, a line is skipped, starting the 
+display from the second one, then 2,4,6,8 ... etcetera: EVEN!
+
+There are those who make 2 copperlists, one that points in one way and one 
+that points in the other, and then depending on the LOF bit points one or the 
+other each frame. But I think it is more "clever" to point only the 
+bitplanes... however you can do as you like, you just need to understand the 
+method.
+
+Lesson11l6.s - is an example in 640x512 with 1 bitplane
+
+Lesson11l6b.s - is an example in 320x512 with 4 bitplanes
+
+To finish this degree course in "copper", level 2, we just have to make a more 
+complex example also for sprites.
+Do you remember how we "reused" them in lesson 7 to make stars?
+Well, what happens if we reuse the sprites every 2 lines?
+
+Lesson11l7.s - To see a mega-use of sprites (128 times each)
+
+		        ____::::____
+		      _/::__ ·· __  \_
+		     ,|:·( o _, o )  |,
+		     (|·    (_       |)
+		     `l.   _        .j'
+		       \   \____/   / Zs!
+		  ______\   :l/    /____
+		 /:::·· ¬\________/   ::\
+		/::·                   ·:\
+
+
+******************************************************************************
+*	          THE 2 8520 CHIPS, CALLED CIAA AND CIAB                     *
+******************************************************************************
+
+If you take the Amiga apart you will find, in addition to Agnus, Paula, 
+Denise, the 680x0 etc., also a couple of 8520 chips, called CIA. These chips 
+have 16 Input / Output pins each, a serial shift register, three timers, an 
+output only pin and an input only pin. Consequently both have 16 registers 
+that can be reached by accessing their relative addresses:
+
+CIAA address map
+---------------------------------------------------------------------------
+ Byte    Register                  Data bits
+Address    Name     7     6     5     4     3     2     1    0
+---------------------------------------------------------------------------
+$BFE001    pra     /FIR1 /FIR0  /RDY /TK0  /WPRO /CHNG /LED  OVL
+$BFE101    prb     Parallel port
+$BFE201    ddra    Direction for port A (BFE001);1=output (normally $03)
+$BFE301    ddrb    Direction for port B (BFE101);1=output (can be in/out)
+$BFE401    talo    CIAA timer A low byte (.715909 Mhz NTSC; .709379 Mhz PAL)
+$BFE501    tahi    CIAA timer A high byte
+$BFE601    tblo    CIAA timer B low byte (.715909 Mhz NTSC; .709379 Mhz PAL)
+$BFE701    tbhi    CIAA timer B high byte
+$BFE801    todlo   Timer A 50/60 Hz - bits 7-0 (VSync or line tick)
+$BFE901    todmid  Timer A 50/60 Hz - bits 15-8
+$BFEA01    todhi   Timer A 50/60 Hz - bits 23-16
+$BFEB01            Not used
+$BFEC01    sdr     CIAA serial data register (connected to the keyboard)
+$BFED01    icr     CIAA interrupt control register
+$BFEE01    cra     CIAA control register A
+$BFEF01    crb     CIAA control register B
+
+Nota:  the CIAA can generate an INT2 interrupt, ie level 2, $68.
+
+
+CIAB address map
+---------------------------------------------------------------------------
+ Byte     Register                   Data bits
+Address     Name     7     6     5     4     3     2     1     0
+---------------------------------------------------------------------------
+$BFD000    pra     /DTR  /RTS  /CD   /CTS  /DSR   SEL   POUT  BUSY
+$BFD100    prb     /MTR  /SEL3 /SEL2 /SEL1 /SEL0 /SIDE  DIR  /STEP
+$BFD200    ddra    Direction for Port A (BFD000);1 = output (normally $FF)
+$BFD300    ddrb    Direction for Port B (BFD100);1 = output (normally $FF)
+$BFD400    talo    CIAB timer A low byte (.715909 Mhz NTSC; .709379 Mhz PAL)
+$BFD500    tahi    CIAB timer A high byte
+$BFD600    tblo    CIAB timer B low byte (.715909 Mhz NTSC; .709379 Mhz PAL)
+$BFD700    tbhi    CIAB timer B high byte
+$BFD800    todlo   Horizontal sync timer -  bits 7-0
+$BFD900    todmid  Horizontal sync timer -  bits 15-8
+$BFDA00    todhi   Horizontal sync timer -  bits 23-16
+$BFDB00            Not used
+$BFDC00    sdr     CIAB serial data register (not used)
+$BFDD00    icr     CIAB interrupt control register
+$BFDE00    cra     CIAB Control register A
+$BFDF00    crb     CIAB Control register B
+
+Note:  CIAB can generate an INT6, ie level 6: $78.
+
+From this "map" you can see how the tasks of the 2 CIAs range from reading the 
+keyboard, to managing the serial port, (for data exchange between 2 computers 
+or between computers and modems), to managing the parallel port (for the 
+printer, for example), when checking the heads of the disk drive, it also has 
+"clocks" that can count microseconds or hours.
+
+In reality, however, we will not be interested in all these characteristics, 
+for various reasons. First of all, the part concerning the hardware of the 
+disk drives can be omitted, since any good game / demo that is respected must 
+be installed on Hard Disk (or CD-ROM!), Such as Brian The Lion.
+
+As for the management of the parallel port and the serial port, the uses could 
+be to print some instructions for the game or a few sentences said by a 
+character, or for the serial the possibility of two-player with computers on 
+the network, that is connected with a cable. But it must be said that the 
+management of the printer should be done by the operating system, using the 
+"parallel.device". The same is true of the serial port: the serial.device is 
+certainly more secure than routines written via hardware, especially for 
+future Amigas or multiserial cards.
+
+As for the timers, given that the operating system uses several for its tasks, 
+we will see if and which ones to use.
+
+But then, are we almost exclusively interested in reading from the keyboard?
+
+Yes, in fact, if you peeked into the code of a video game, you would notice 
+that only the $6c (cop / vertb / vblank) and $68 (int2 of the keyboard ciaa) 
+interrupts are redefined: level 3 ($6c) is used to put the music or other 
+routines in sync with the electron brush, while level 2 ($68) to read the 
+keyboard. Of course, by reading the left mouse button or other things you can 
+access cia registers, but these are simple BIT controls or settings, you don't 
+need to do long dissertations on "btst.b #6,$bfe001".
+
+In the demos, even, it is easy for no interrupt to be redefined, or for only 
+the $6c to be used to put the music in.
+
+So, let's start the CIAA explanation with keyboard handling, which involves 
+registers $bfec01 (sdr), $bfed01 (icr), $bfee01 (cra), and level 2 interrupt 
+($68). First we see the 3 registers separately, then we do some examples on 
+their correct use. I state that when a key is pressed or released an 8-bit 
+code is sent from the keyboard through $bfec01, and a level 2 interrupt ($68) 
+is generated in which it is necessary to "tell" the keyboard that the code of 
+that key has been received.
+
+Note that this code is NOT the ascii code of the character pressed, but a code 
+with the position of the button pressed on the keyboard.
+
+
+****************************************************************************
+;* BFEC01    sdr     CIAA sdr (serial data register - connected to the keyboard)
+****************************************************************************
+
+It is a synchronous 8-bit shift register, connected to the keyboard.
+
+It can work in 2 ways: INPUT or OUTPUT, and the selection between these two 
+modes can be done by acting on bit 6 of $bfee01 (cra).
+
+In the INPUT mode, the data received from the keyboard are entered in the 
+register, one bit at a time and, when all the 8 bits that make up the 
+character pressed have "arrived", an interrupt INT2 ($68) is generated, from 
+which it is necessary to see which key it is and write it down in some variable.
+
+In this case, the byte corresponding to the character code is read:
+
+Eg:
+	move.b $bfec01,d0
+
+In OUTPUT mode, on the other hand, it is written to the register, for example 
+"clr.b $bfec01".
+
+****************************************************************************
+;* BFED01    icr     CIAA interrupt control register
+****************************************************************************
+
+This register controls the interrupts that can be generated by the CIAA.
+In fact, CIAs generate interrupts on various occasions, for example when a 
+timer countdown has finished, or when the serial port has finished a transfer.
+
+We are particularly interested in the INT2 interrupt, level2, that is the 
+offset vector $68, which is generated when a key is pressed.
+
+The operation of the icr ($bfed01 for CIAA and $bfdd00 for CIAB) is very 
+particular, in fact they consist of a write-only "mask" of a read-only data 
+register. But what does this mean? First of all, it's very easy to get it 
+wrong and drive CIA interrupts crazy, which is unfortunate. Each interrupt is 
+enabled if the corresponding bit of the mask is set to 1, in fact each CIAA 
+interrupt, as it would with an INTREQ ($dff09c), sets its request bit in this 
+register.
+
+At this point, if this interrupt is enabled, bit 7 (IR) is set, which is a 
+kind of set / clr bit, as in dmacon, i.e. when this bit is cleared the other 6 
+bits set are cleared, when the bit 7 is set, however, the other set bits are 
+set, while those set to zero are not modified.
+
+The confusing thing is that when you read the register its contents are 
+cleared, whether you do a "tst.b $bfed01" or any read action; resetting the 
+register also eliminates the interrupt request, in a similar way to resetting 
+the INTREQ bits ($dff09c).
+
+Now we're only interested in its keyboard interrupt function, so let's briefly 
+see its bits in read mode, with comments only where it matters:
+
+CIAA ICR ($bfed01)
+
+BIT	NAME	DESCRIPTON
+
+07	IR	Indicates, if set, that there is an interrupt in progress
+06	0
+05	0
+04	FLG
+03	SP	If set, we are in an interrupt generated by the keyboard
+02	ALRM
+01	TB
+00	TA
+
+Remember that if you read the register it is reset, so if you want to know 
+which bits were set, you have to copy it into a Dx register and check this 
+register: by re-reading $bfed01 the bits are reset.
+
+****************************************************************************
+;* BFEE01    cra     CIAA cra (control register A)
+****************************************************************************
+
+This register is called "control" precisely because its bits control the 
+function of other registers. Here is its "map", with comments only to the bits 
+that interest us for reading from the keyboard:
+
+CIA Control Register A
+
+  BIT  NAME	FUNCTON
+  ---  ----	-------
+   0  START	Timer A
+   1  PBON	Timer A
+   2  OUTMODE	Timer A
+   3  RUNMODE	Timer A
+   4  LOAD	Timer A
+   5  INMODE	Timer A
+   6  SPMODE	If it is a 1 = register ($bfec01) output (for writing)
+		If it is a 0 = register ($bfec01) input (for reading)
+   7   Not used
+
+
+As you can see, the only bit that interests us is 6, which "decides" the 
+function of $bfec01, that is, whether its direction is "towards the keyboard" 
+(output), so we can write to it, or "from the keyboard towards the Amiga 
+"(input), so we can read the character relative to the key that was pressed.
+
+To switch modes just do this:
+
+	bset.b	#6,$bfee01	; CIAA cra - sp ($bfec01) output
+	....
+	bclr.b	#6,$bfee01	; CIAA cra - sp (bfec01) input
+
+Or, if you think it's more elegant, you can use AND and OR to do it:
+
+	or.b	#$40,$bfee01	; SP OUTPUT (%0100000, let's set bit 6!)
+	...
+	and.b	#$bf,$bfee01"	; SP INPUT  (%10111111, let's clear bit 6!)
+
+You could also move "0000" into a register, multiply it by 5, divide it by 5, 
+add 20, subtract 10, add 1, subtract 11, set or reset bit 6, and do an AND or 
+an OR with the $bfee01, the assembler allows you to use infinite ways to do 
+the same thing. But the bset / clr is enough!
+
+However it should be noted that between input mode and output mode it is 
+necessary to wait about ninety microseconds, since the hardware of the CIAA 
+and the keyboard chip cannot time itself in input mode.
+
+The 8 bits of the character corresponding to the pressed key are transferred 
+serially one bit at a time from the keyboard chip to the CIAA. When all 8 bits 
+have been transferred, WE MUST LOWER THE KDAT LINE FOR AT LEAST TWENTY 
+MICROSECONDS (or 3/4 raster lines) TO CONFIRM TO THE KEYBOARD THAT WE HAVE 
+RECEIVED THE DATA. The KDAT "thread" is controlled by the SP / SPMODE bit, and 
+in practice we have to do this:
+
+------------------------------------------------------------------------------
+	move.b	$bfec01,d0	; CIAA sdr - Let's read the current character
+	bset.b	#6,$bfee01	; CIAA cra - sp ($bfec01) output, in order to 
+				; lower the KDAT line to confirm that we have 
+				; received the character.
+
+	st.b	$bfec01		; $FF in $bfec01 - Wow! I have received the data
+
+; Here we have to put a routine that waits 90 milliseconds because the KDAT 
+; line has to stay low long enough to be "understood" by all kinds of 
+; keyboards. For example, you can expect 3 or 4 raster lines.
+
+	bclr.b	#6,$bfee01	; CIAA cra - sp (bfec01) input again.
+------------------------------------------------------------------------------
+
+When reading the keyboard via hardware, you need to be very careful about the 
+timing that waits 90 milliseconds, for 2 reasons:
+
+1) The timing routine has to wait the same time on all 68000 to 68060 
+   processors. For this you can use the electron brush, or even a CIA timer, 
+   but NEVER do a simple dbra loop that runs many times, or a series of NOPs, 
+   because due to the cache on 68020+ it will be executed in no time.
+
+2) Once our routine "waits" correctly on all 680x0s, we also need to consider 
+   the fact that not all keyboards are the same!
+   For example, 2 raster lines may be enough for one keyboard, while 4 raster 
+   lines may be needed for another! In fact, keyboards contain a chip that 
+   controls them, and this can be different in different Amiga models. For 
+   example, in the A1200 the keyboard is "cheap", in fact it differs from 
+   normal Amiga keyboards (Mitsumi in general) by the fact that you cannot 
+   record more than one pressure at a time ... if you hold down a key and at 
+   the same time press another, releasing the first does not show the second.
+   
+   The wait routine for waiting between output and input:
+   "or.b #$40" or "bset.b #6",$bfee01 and "and.b #$bf" or "bclr.b #6",$bfee01
+   determines whether your program will read the keyboard correctly or crash 
+   when a key is pressed on some computers.
+
+In this regard, let's see how to wait properly, using the vblank:
+
+; If you don't want to "mess up" address registers:
+
+------------------------------------------------------------------------------
+	moveq	#4-1,d0		; we wait 4 rasterlines (3+random...!)
+waitlines:
+	move.b	$DFF006,d1
+stepline:
+	cmp.b	$DFF006,d1
+	beq.s	stepline
+	dbra	d0,waitlines
+------------------------------------------------------------------------------
+
+; If, on the other hand, you also want to "mess up" an address register:
+
+------------------------------------------------------------------------------
+	lea	$dff006,a0	; VHPOSR
+	moveq	#4-1,d0	; Number of lines to wait = 4 (in practice 3 plus the 
+			; fraction in which we are at the starting moment)
+waitlines:
+	move.b	(a0),d1	; $dff006 - current vertical line in d1
+stepline:
+	cmp.b	(a0),d1		; are we still on the same line?
+	beq.s	stepline	; if so, wait
+	dbra	d0,waitlines	; "expected" line, wait for d0-1 lines
+------------------------------------------------------------------------------
+
+		                    _  ___
+		         _æøæ,_  ¸æ¤³°¤¤4Øæ,
+		       ,Ø° __¬¶_æ³       ¬VØø
+		    __æV  Ø°4, Ø'  ___     0Ø
+		  _ØØØØ#  #_,²J¹  æ°"°4,   IØ
+		 ÁØ""ØØØþ_____ØL  #__,Ø¹   ØØ
+		JØF  ØØ³°°0ØØØØØ_  ¬~~    JØ#
+		ØØ1  ¶Ø_  ,Ø°¤ØØØØæ______øØØØ,
+		#Ø1   °#ØØ#   ØØØØØØØØØØØØ¯¬ØQ
+		¬ØN     `¢Ø&æØØØØØØØØØØØØ`  ØW
+		 ¤Øb       °¢ØØØØØØØØØØ³   JØØ
+		  `Øæ         ¬`°°°°"    _dØØ@
+		   ¬¢Ø_               __øØØØØ
+		     0Ø       ¸___,øøØØØØØØ³
+		     VØL_   _øØØØØØØØØØØØ²  xCz
+		     ¬ØØØØØØØØØØØØØØØ¤³°
+		      ¬ØØØØØØØ°
+		        °^°°¯
+
+- CHARACTERISTICS OF THE CHARACTER CODE TRANSMITTED IN $bfec01
+
+We have already said that the transmitted code is not an ascii code, but an 
+information on the key that has been pressed. This is also because depending 
+on the different keyboards, in English, Italian or other, many keys have a 
+different letter printed on them. But if I say: the third fret of the second 
+row, you can't go wrong. However, the 8 bits (1 byte) we take from the $bfec01 
+contain 7 bits relating to the key identifier, plus a bit that establishes 
+whether the key has been pressed or released.
+
+In fact, the key identifier is sent both when it is pressed and when it is 
+released, with the difference that the highest bit, the eighth, is once 
+cleared (released) or set (pressed).
+
+What's more, all transmitted codes are rotated one bit to the left before 
+their transmission.
+
+The order of transmission is therefore 6-5-4-3-2-1-0-7. However, just use the 
+instruction "ROR.B #1,xxx" to return the order 7-6-5-4-3-2-1-0.
+
+The transmission of a bit takes 60 microseconds, therefore the entire byte 
+that constitutes the character is transferred in 480 microseconds, so that 
+17000 bits per second can be transferred. But what does it matter to us? 
+Nothing!
+
+Let's see instead how to recognize if the key pressed is the A, the B or some 
+other. In the hardware manual there is a list with a code per key, where the 
+peculiarity is that the key "1" corresponds to the code $01.
+
+To obtain these codes it is necessary to perform a NOT of the byte, besides 
+doing a rotation of the bits with a "ROR" to return the order 76543210.
+
+In practice, what we need to do is:
+
+	move.b	$bfec01,d0	; CIAA sdr (serial data register - connected 
+				; to the keyboard - contains the byte sent by 
+				; the keyboard chip) WE READ THE CHAR!
+	NOT.B	D0		; we adjust the value by inverting the bits
+	ROR.B	#1,D0		; and returning the sequence to 76543210.
+
+Now in d0 we have the byte with the sequence of bits 76543210 instead of 
+65432107, and in addition all the bits are inverted, so as to start the 
+"count" from the first key on the top left (not ESC, but the one next to 1).
+
+Here is the sequence of the codes with the relative character (normal and 
+shifted, but consider that the keyboard described here is the US one). (KEYS 
+PRESSED)
+
+	cod.	$00	 ;` - ~
+	cod.	$01      ;1 - ! 
+	cod.	$02      ;2 - @
+	cod.	$03      ;3 - #
+	cod.	$04      ;4 - $
+	cod.	$05      ;5 - %
+	cod.	$06      ;6 - ^
+	cod.	$07      ;7 - &
+	cod.	$08      ;8 - *
+	cod.	$09      ;9 - (
+	cod.	$0A      ;0 - )
+	cod.	$0B      ;- - _
+	cod.	$0C      ;= - +
+	cod.	$0D      ;\ - |
+	cod.	$0e	 ;  << empty
+	cod.	$0F      ;0  numeric keypad
+	cod.	$10      ;q - Q
+	cod.	$11      ;w - W
+	cod.	$12      ;e - E
+	cod.	$13      ;r - R
+	cod.	$14      ;t - T
+	cod.	$15      ;y - Y
+	cod.	$16      ;u - U
+	cod.	$17      ;i - I
+	cod.	$18      ;o - O
+	cod.	$19      ;p - P
+	cod.	$1A      ;[ - {
+	cod.	$1B      ;] - }
+	cod.	$1c	 ; << not used
+	cod.	$1D      ;1  numeric keypad
+	cod.	$1E      ;2  numeric keypad
+	cod.	$1F      ;3  numeric keypad
+	cod.	$20      ;a - A
+	cod.	$21      ;s - S
+	cod.	$22      ;d - D
+	cod.	$23      ;f - F
+	cod.	$24      ;g - G
+	cod.	$25      ;h - H
+	cod.	$26      ;j - J
+	cod.	$27      ;k - K
+	cod.	$28      ;l - L
+	cod.	$29      ;; - :
+	cod.	$2A      ;' - "
+	cod.	$2B      ;(international keyboards only) - close to RETURN
+	cod.	$2c	 ; << not used
+	cod.	$2D      ;4  numeric keypad
+	cod.	$2E      ;5  numeric keypad
+	cod.	$2F      ;6  numeric keypad
+	cod.	$30      ;< (international keyboards only)
+	cod.	$31      ;z - Z
+	cod.	$32      ;x - X
+	cod.	$33      ;c - C
+	cod.	$34      ;v - V
+	cod.	$35      ;b - B
+	cod.	$36      ;n - N
+	cod.	$37      ;m - M
+	cod.	$38      ;, - <
+	cod.	$39      ;. - >
+	cod.	$3A      ;/ - ?
+	cod.	$3b	 ; << not used
+	cod.	$3C      ;.  numeric keypad
+	cod.	$3D      ;7  numeric keypad
+	cod.	$3E      ;8  numeric keypad
+	cod.	$3F      ;9  numeric keypad
+	cod.	$40      ;space
+	cod.	$41      ;back space <-
+	cod.	$42      ;tab ->|
+	cod.	$43      ;return numeric keypad (enter)
+	cod.	$44      ;return <-'
+	cod.	$45      ;esc
+	cod.	$46      ;del
+	cod.	$47	 ; << not used
+	cod.	$48	 ; << not used
+	cod.	$49	 ; << not used
+	cod.	$4A      ;-  numeric keypad
+	cod.	$4b	 ; <<
+	cod.	$4C      ;arrow up  ^
+	cod.	$4D      ;arrow down v
+	cod.	$4E      ;arrow right   »
+	cod.	$4F      ;arrow left «
+	cod.	$50      ;f1
+	cod.	$51      ;f2
+	cod.	$52      ;f3
+	cod.	$53      ;f4
+	cod.	$54      ;f5
+	cod.	$55      ;f6
+	cod.	$56      ;f7
+	cod.	$57      ;f8
+	cod.	$58      ;f9
+	cod.	$59      ;f10
+	cod.	$5A      ;(  numeric keypad
+	cod.	$5B      ;)  numeric keypad
+	cod.	$5C      ;/  numeric keypad
+	cod.	$5D      ;*  numeric keypad
+	cod.	$5E      ;+  numeric keypad
+	cod.	$5F      ;help
+	cod.	$60      ;lshift
+	cod.	$61      ;rshift
+	cod.	$62	 ;caps lock
+	cod.	$63      ;ctrl
+	cod.	$64      ;lalt
+	cod.	$65      ;ralt
+	cod.	$66      ;lamiga
+	cod.	$67      ;ramiga
+
+
+As you can see, the sequence roughly respects the order of the keys, starting 
+from the row with 1,2,3,4,5 ... then the row below with q, w, e, r, t, y ... 
+etc.
+
+These codes refer to keys PRESSED, where bit 7, the one that determines 
+whether a key has been pressed or released, is at zero. In fact we have 
+performed a NOT on the byte, which has also inverted bit 7: if a key is 
+PRESSED, now bit 7 = 0, if a key is released, bit 7 = 1.
+
+If the key is released, bit 7 (the eighth) must be considered as set, so the 
+table above would become:
+
+	cod.	$80	 ;` - ~
+	cod.	$81      ;1 - ! 
+	cod.	$82      ;2 - @
+	...
+
+Beware that the Amiga600 do not have a numeric keypad, so if you use the 
+keypad keys on such computers there is no way to press them! I therefore 
+recommend that you avoid the keys on the keypad.
+
+In light of these considerations, we can see what the level 2 interrupt ($68) 
+will look like, which will allow us to save the keystroke code in the 
+"ActualKey" variable:
+
+		         ___________
+		        /~~/~~|~~\~~\
+		        \  \  |  /  /______
+		       __\_________/__oOOo_Z________
+		      |::888°_~_°888 o¯¯¯T::::Y~~~~~|
+		 _    |:::\  °'°  /  __ ||::::|     |
+		 \\/Z |::::\ `-' /¯]|··|T|::::|     |
+		(\\  )|::::/\`='/\¯  ¯¯  |::::l_____j
+		 \¯¯/ ~Z   \ ¯¯¯ /~~~~~~~/~~~~~~~~~~~
+		 /¯¯\_/     \ _ /  _    /
+		 \   /   /T  (Y)   |\__/
+		  \_____/ |   ¯    |
+		          |   :    |
+		          |        |
+		          |   .    | ppX
+
+*****************************************************************************
+*	INTERRUPT ROUTINE $68 (level 2) - KEYBOARD management
+*****************************************************************************
+
+;03	PORTS	2 ($68)	Input/Output Ports and timers, connected to line INT2
+
+MioInt68KeyB:	; $68
+	movem.l d0-d1/a0,-(sp)	; saves used registers on the stack
+	lea	$dff000,a0	; custom register offset
+
+	MOVE.B	$BFED01,D0	; Ciaa icr - in d0 (by reading the ICR we also 
+				; cause its zeroing, so the int is "canceled" 
+				; as in intreq).
+	BTST.l	#7,D0	; bit IR, (cia interrupt authorized), cleared?
+	BEQ.s	NonKey	; if so, exit
+	BTST.l	#3,D0	; bit SP, (keyboard interrupt), cleared?
+	BEQ.s	NonKey	; if so, exit
+
+	MOVE.W	$1C(A0),D0	; INTENAR in d0
+	BTST.l	#14,D0		; Enable Master Bit cleared?
+	BEQ.s	NonKey		; If yes, interrupts are not active!
+	AND.W	$1E(A0),D0	; INREQR - in d1 only the bits that are set 
+				; both in INTENA and INTREQ remain set in 
+				; order to be sure that the interrupt occurred.
+	btst.l	#3,d0		; INTREQR - PORTS?
+	beq.w	NonKey		; If not, then get out!
+
+; After the checks, if we are here it means that we have to take the character!
+
+	moveq	#0,d0
+	move.b	$bfec01,d0	; CIAA sdr (serial data register - connected 
+				; to the keyboard - contains the byte sent by 
+				; the keyboard chip) WE READ THE CHAR!
+
+; we have the char in d0, we "treat" it ...
+
+	NOT.B	D0		; we adjust the value by inverting the bits
+	ROR.B	#1,D0		; and returning the sequence to 76543210.
+	move.b	d0,ActualKey	; we save the character
+
+; Now we have to communicate to the keyboard that we have taken the data!
+
+	bset.b	#6,$bfee01	; CIAA cra - sp ($bfec01) output, in order to 
+				; lower the KDAT line to confirm that we have 
+				; received the character.
+
+	st.b	$bfec01		; $FF in $bfec01 - wow! I have received the data
+
+; Here we have to put a routine that waits 90 microseconds because the KDAT 
+; line has to stay low long enough to be "understood" by all kinds of 
+; keyboards. For example, you can expect 3 or 4 raster lines.
+
+	moveq	#4-1,d0	; Number of lines to wait = 4 (in practice 3 plus the 
+			; fraction of time in which we are at the starting 
+			; moment)
+waitlines:
+	move.b	6(a0),d1	; $dff006 - current vertical line in d1
+stepline:
+	cmp.b	6(a0),d1	; are we still on the same line?
+	beq.s	stepline	; if so, wait
+	dbra	d0,waitlines	; "expected" line, wait for d0-1 lines
+
+; Now that we've been waiting, we can return $bfec01 to input mode...
+
+	bclr.b	#6,$bfee01	; CIAA cra - sp (bfec01) input again.
+
+NonKey:		; 3210
+	move.w	#%1000,$9c(a0)	; INTREQ remove request, int done!
+	movem.l (sp)+,d0-d1/a0	; restore registers from stack
+	rte
+
+-----------------------------------------------------------------------------
+
+You shouldn't have noticed anything new, it's just a "summary" of the things 
+we've already explained. Then ultimately there are only a few lines and we 
+only use registers d0 and a0, it is not a COMPLICATED routine!
+
+The only thing you need to remember is to put this interrupt on vector $68 + 
+VBR, and to enable it, by setting bit 3 of INTENA ($dff09a).
+
+For example, if you are using a level 3 interrupt ($6c) to play music, using 
+only VERTB (bit 5), you can write:
+
+		; 5432109876543210
+	move.w	#%1100000000101000,$9a(a5)    ; INTENA - enable only VERTB of 
+					      ; level 3 and level 2
+
+Or in other words "move.w #$c028,$dff09a".
+
+We can see the correct use of this interrupt in Lesson11m1.s
+
+In this listing, the keyboard code is entered in color0 to "see" the actual 
+operation of the routine itself.
+
+To exit, of course, you need to press a key: the space bar.
+
+For convenience, a rudimentary routine for converting keyboard codes to ASCII 
+is included in Lesson 11m2.s, which can be used if you want to make it 
+possible to print what is written with the keyboard, for example if you want 
+to make a utility, or simply write your name in the high score of your game.
+
+		             ___________
+		            (          ¬)
+		             \_       _/
+		              L       L
+		         ____/___   ___\____
+		        //¯¯¯¯¯¯\\_//¯¯¯¯¯¯\\
+		       ((     ___¯¯¯___     ))
+		        \\ _/\___\X/___/\_ //
+		         \ T     \ /     T /
+		           |      T      |
+		         __|   - o|O -   |__
+		     tS / ¬|      |      | ¬\ tS
+		\      / / ¯\_____T_____/¯ \ \      /
+		->----/ /\      /   \      /\ \----<-
+		/     \   \    (_____)    /   /     \
+		       \   \_/\_______/\_/   /
+		        \_________A_________/
+
+*****************************************************************************
+;		THE TIMERS OF CIAA AND CIAB
+*****************************************************************************
+
+These timers are actually used very little in games, and almost never in 
+demos, just in certain (complicated) routines that play music, which in any 
+case you just include and they play on their own.
+
+Among other things, these timers are also used by the operating system, so 
+using them you can risk making everything go crazy when we exit our program.
+
+Moreover, waiting for the raster lines with the $dff006 you can do all the 
+waiting you need, without risking these eventualities.
+
+Therefore, in the lesson there are only a couple of listings that use timers, 
+as an example. In listings of more advanced lessons we will have the 
+opportunity to find applications of these timers, and we will see them on a 
+case-by-case basis.
+
+Lesson11n1.s	- Use of timer A of the CIAA or CIAB
+
+Lesson11n1b.s	- Use of CIAA or CIAB timer B
+
+Lesson11n2.s	- Using the TOD timer (Time of day)
+
+When using the CIA timers consider that the operating system uses these for 
+the following purposes: (better use the CIAB!)
+
+   CIAA, timer A	Used for interfacing with the keyboard
+
+!  CIAA, timer B	Used by the exec for task switching etc.
+
+   CIAA, TOD		50/60 Hz timer used by the Timer.device
+
+   CIAB, timer A	Not used, available for programs
+
+   CIAB, timer B	Not used, available for programs
+
+   CIAB, TOD		Used by the graphics.library to follow the positions 
+			of the electron brush.
+
+If you must use timers that also serve the operating system, do so only if you 
+have disabled multitasking and system interrupts, that is, if you have taken 
+complete control of the system. Never the CIAA, timer B!
+
+                                                              |||||
+              |||||                                       _A_ /o O\
+_   _ ___.oOo _o_O_ oOo. __ ____ ___ _ _ _____ _ _ _ _   (_^_)_\_/ _oOo. _  
+*****************************************************************************
+;		LOADING FILES WITH DOS.LIBRARY
+*****************************************************************************
+
+To conclude this lesson full of refinements and various topics, there is no 
+better topic than LOADING DATA.
+
+If you want to program something "big", from the point of view of the amount 
+of drawings, music and various data, you cannot simply include everything with 
+the incbin and save the mega-executable with "WO", because the file would be 
+too large to be able to be loaded into memory.
+
+Suppose, for example, we want to make a slideshow, that is a program that 
+shows a series of images one after the other, and that there are 30 images, 
+100Kb large each. They become 3MB of images. Not being able to do a series of 
+30 INCBINs to save a 3MB file and run, we just have to find a way to "load" 
+one at a time.
+
+But which way to use? There are 2 of them mainly:
+
+1) AUTOBOOT LOADING FROM THE TRACKS OF THE DISK, that is a mode not compatible 
+   with DOS, in fact you will notice that many game discs, if inserted into 
+   the drive once the workbench is loaded, are not readable with commands such 
+   as "DIR", and are NOT DOS, or WRONG ... in short, they look like rotten 
+   discs! If copied, through copiers such as XCOPY or DCOPY, some of these non 
+   dos games appear with "RED" traces, ie not recognizable even by the copier, 
+   while others, despite being unreadable by the dos, appear as "HEALTHY", ie 
+   with green traces.
+   
+   I must point out that the CRACKED games (unprotected and distributed by 
+   pirates) are all of the second type, that is to say with GREEN traces, in 
+   fact the unprotection often consists in transforming the unrepairable 
+   traces into copyable traces, but often remain unreadable by the dos. The 
+   TRACKMOs are the majority of the demos, and are "copyable" tracks, but not 
+   readable via dos.
+   
+   A feature is that it is necessary to write code for absolute addresses, not 
+   relocatable, for which usually only the first mega of CHIP RAM is used, or 
+   for a1200 the first 2 mega, and any expansions of FAST RAM are not used, 
+   apart from those that use COMPLEX LOADERS WITH RELOCATORS that look like 
+   mini operating systems, which however often fail on the 68040 due to 
+   excessive programming "exuberance".
+   
+   This system has the "advantage" of being slightly faster, on floppy disks, 
+   than normal dos, but the disadvantage of not being able to install the 
+   program on the Hard-Disk, nor to be able to convert it to CD32 and so on.
+
+2) "LEGAL" LOADING USING DOS.LIBRARY, that is a way very similar to that used 
+   by any program that uses the operating system, compiled with any language 
+   such as C, AMOS and so on.
+
+   In reality, keeping our copperlist and operating on the hardware registers 
+   we make a "hybrid" system, that is we use the dos.library in a "particular" 
+   state with our copperlist and our interrupts.
+   
+   A feature of the programs that use this system is that the operating system 
+   must be left "intact" and the code must be totally relocatable, (being able 
+   to access any FAST RAM).
+   
+   This system has the advantage of being able to be used on Hard Disk, CD-ROM 
+   and any drive supported by the system, even future peripherals.
+
+Although the first system may seem more attractive for one who wants to 
+program at the hardware level, in reality it is an OLD, often INCOMPATIBLE and 
+limiting way due to the impossibility of installing the program (or demo that 
+is) on HD. As long as we are talking about a demo or a game for Amiga500 that 
+is only with 1 disc, perhaps the trackloader option is acceptable, but from 2 
+discs upwards the system only leads to anger the growing number of HardDisk 
+owners.
+
+A game installed on HD will always load faster than one from disc with the 
+fastest turbo loader possible.
+
+Then there is the issue of FAST RAM: to be able to use it with a trackloader 
+it would be necessary to make a mini operating system that finds where it is 
+and relocates the code at the right address. I am not going to offer you the 
+listing of one of these loaders + relocators, so as not to lead you on the 
+wrong track. Think of the satisfaction of being able to convert your game for 
+CD32, or of seeing it working on the 68060 and any HardDisk, and instead of 
+the disappointment of seeing the "hand" relocator fail or noticing that the 
+program does not use fast ram .. .. have I convinced you?
+
+There is also another thing: it would be good to make use of the "assign" 
+command for our productions that have to upload files. For example, if we play 
+a game on a disc, giving the disc the name "Dog", we can load the files with 
+"Dog:file1", "Dog:file2", "Dog2/objects/ogg1", and so on. If you want to 
+install on Hard Disk, just make a directory, copy the contents of the disk to 
+it, and add to the startup-sequence:
+
+	assign	Dog: dh0:gamedog	; for example...
+
+If the game is multi-disc, just copy all the discs into the directory and 
+assign each disc:
+
+	assign	Dog1: dh0:gamedog
+	assign	Dog2: dh0:gamedog
+	assign	Dog3: dh0:gamedog
+
+To "automatically" add the necessary assignments to the startup-sequence or 
+user-startup, during the installation of the game, you can use the options of 
+the commodore installer or other systems, but this is not included in the 
+course.
+
+Well, let's see how to load a "path:xx" file into a destination in memory. 
+There are various ways. The simplest is this:
+
+CaricaFile:
+	move.l	#filename,d1	; string address "file name + path"
+	MOVE.L	#$3ED,D2	; AccessMode: MODE_OLDFILE - File that already 
+				; exists, and that we can therefore read.
+	MOVE.L	DosBase(PC),A6
+	JSR	-$1E(A6)	; LVOOpen - "Open" the file
+	MOVE.L	D0,FileHandle	; Save its handle
+	BEQ.S	ErrorOpen	; If d0 = 0 then there's an error!
+
+	MOVE.L	D0,D1		; FileHandle in d1 for Read
+	MOVE.L	#buffer,D2	; Destination address in d2
+	MOVE.L	#42240,D3	; File length (EXACT!)
+	MOVE.L	DosBase(PC),A6
+	JSR	-$2A(A6)	; LVORead - read file and copy it to the buffer
+
+	MOVE.L	FileHandle(pc),D1 ; FileHandle in d1
+	MOVE.L	DosBase(PC),A6
+	JSR	-$24(A6)	; LVOClose - close the file.
+ErrorOpen:
+	rts
+
+
+FileHandle:
+	dc.l	0
+
+; Text string, to be terminated with a 0, to which d1 must point before we 
+; OPEN with the dos.lib. It is advisable to put the entire path.
+
+Filename:
+	dc.b	"Assembler3:sorgenti7/amiet.raw",0	; path+filename
+	even
+
+This is perfect if you know the exact length of the file to load.
+Since this is our program, we are supposed to know how long our data files are!
+
+Let's see an example in Lesson11o1.s
+
+But we are more interested in loading a file while we are viewing our 
+copperlist, and perhaps playing music in interrupt. How do you reconcile a 
+"legal" loading with a completely disabled operating system? Meanwhile, let's 
+consider the fact that system interrupts must all be reactivated, while the 
+system copperlist is not needed, and we can keep ours. So how do you keep 
+playing the music, or do something else, while a loading is taking place?
+
+The systems are manifold. We could "legally" add our routines to the system 
+interrupt, with an AddIntServer().
+
+Or we could perform our own interrupt, which then JUMPs to execute the system 
+interrupt. A slightly less respectful way, but it works and I prefer to use 
+it, also because I've seen it used in CD32 games.
+
+In practice, here is what we have to do: restore the old interrupts and the 
+old DMA / INTENA state, re-enable multitasking etc., as we do at the exit, but 
+leave our copperlist and "insert" our $6c interrupt in addition to the 
+system's. Then load the file, and WAIT A FEW SECONDS TO BE SURE THAT THE DRIVE 
+OR HARD DISK OR CD-ROM LIGHT IS OFF, then close everything and go back to 
+hitting the metal mercilessly.
+
+In short, before and after loading, the operating system must be re-enabled 
+and disabled, keeping our copperlist.
+
+The only detail is the interrupt: how do we run ours, then jump to the old 
+one? I want to offer you a system for real smugglers, but it works, as long as 
+you call the routine "ClearMyCache", which clears the instruction cache of the 
+processor (68020+).
+
+In fact we will be using for the first (and last) time, SELF-MODIFYING code!
+
+It should never be used, but I want to show you one of the few cases where it 
+works and is useful, just for information.
+
+You know that when each statement is assembled it becomes a series of 
+hexadecimal values? for example RTS becomes $4e75, and so on.
+
+We have to JUMP to the old interrupt, after executing ours.
+Thus, a "JMP $12345", for example, becomes "$49f900012345", ie $4ef9, followed 
+by the address to jump to, which is a longword:
+
+	dc.w	$4ef9		; val esadecimale di JMP
+Crappyint:
+	dc.l	0		; Indirizzo dove Jumpare, da AUTOMODIFICARE...
+
+Now, if we put the system interrupt address in CrappyInt with:
+
+	move.l	oldint6c(PC),crappyint	; For DOS LOAD - we will jump to oldint
+
+We would have the "JMP oldint6c" we were looking for ... then the final 
+interrupt is:
+
+          :                                                     ||| |
+          .  ||||                                            .  oO\ .
+          : ([oO])                                          (^) \O/<:
+          |__\--/__                                          |\__>  |
+ -  - - --+------ - ---- ----- - ---------- ------ ------- - - -----+-  -   -
+*****************************************************************************
+; Interrupt routine to insert during loading. The routines that will be placed 
+; in this interrupt will also be executed during loading, whether it is from 
+; floppy disk, hard disk, or CD ROM.
+; PLEASE NOTE THAT WE ARE USING THE COPER INTERRUPT, AND NOT THE VBLANK, THIS 
+; BECAUSE DURING DISC LOADING, ESPECIALLY UNDER KICK 1.3, THE VERTB INTERRUPT 
+; IS NOT STABLE, so much so that the music would have jolts.
+; Instead, if we put a "$9c,$8010" in our copperlist, we're sure this routine 
+; will only run once per frame.
+*****************************************************************************
+
+myint6cLoad:
+	btst.b	#4,$dff01f	; INTREQR - is bit 4, COPER, cleared?
+	beq.s	nointL		; If so, it's not a "real" COPER int!
+	move.w	#%10000,$dff09c	; If not, it's time, let's remove the req!
+	movem.l	d0-d7/a0-a6,-(SP)
+	bsr.w	mt_music	; Play the music
+	movem.l	(SP)+,d0-d7/a0-a6
+nointL:
+	dc.w	$4ef9		; hexadecimal value of JMP
+Crappyint:
+	dc.l	0		; Address where to Jump, to AUTOMODIFY ...
+				; ATTENTION: the self-modifying code should 
+				; generally not be used. However if you call a 
+				; ClearMyCache before and after, it works!
+
+As you can see, just point to this interrupt in $6c+VBR to execute mt_music 
+and the old system interrupt, getting the music + loading simultaneously.
+
+Let's see an example in Lesson 11o2.s
+
+At this point you can imagine what the routine that blocks the intuition input 
+can do: when we load a file, we re-enable multitasking and system interrupts 
+so, even if our copperlist is displayed, the workbench works perfectly, so 
+much so that if the mouse moves "blindly" during a file load, you can also 
+operate some menus or click some icons, or give keyboard commands to the CLI.
+
+Think of a gamer who has the habit of moving and pressing the mouse during the 
+uploads so as not to get nervous: at the exit of the game he may realize that 
+he has clicked the Hard Disk icon and accidentally chose the format option 
+from the menu of the WB that he didn't see, and maybe accidentally hitting the 
+keyboard might have given it an obscene name, too.
+
+Therefore, even if once the operating system has been disabled, calling the 
+InputOff routine is not essential, if files are loaded or other operations are 
+performed, it is good that it is not possible to do damage!
+
+			-	-	-
+
+To end the lesson, let's see how to load a file whose length we do not know a 
+priori, also taking the opportunity to explain the AllocMem and FreeMem 
+routines.
+
+To know the length of a file, just execute a special function, called Examine, 
+as long as you have locked the file. This is not very difficult, just do a few 
+more JSRs.
+
+Note that Examine just fills a $104 bytes long buffer with the various data 
+from the file, here is an example:
+
+
+	cnop	0,4	; Attention! The FileInfoBlock must be aligned to 
+			; longword, it is not enough that it is at an even 
+			; address!
+
+fib:
+	dcb.b	$104,0	; FileInfoBlock Structure: offsets.
+			; 0 = fib_DiskKey
+			; 4 = fib_DirEntyType (<0 = file, >0 = directory)
+			; 8 = FileName (max 30 characters, terminated with 0)
+			; $74 = fib_Protection, $78 = fib_EntryType
+			; $7c = fib_Size, $80 = fib_NumBlocks
+			; $84 = fib_Date (3 longs: Days, Minute, Tick)
+			; $90 = comment (terminated with a 0)
+
+As you can see, at the offset $7c we find the length. We don't care about 
+other things ... what about the date or the comment?
+
+However, since we need to allocate the memory for the file, we will also 
+allocate it for the FileInfoBlock, in order to save ourselves this "dcb.b 
+$104,0".
+
+Once we know the length of the file, we will have to create a buffer in memory 
+as long as the file, to load it into it. This is done with AllocMem, which 
+requests the number of bytes to allocate and the type of memory, whether chip 
+or not, in a similar way to the section with "_C" or not.
+
+Unlike the sections, however, at the end of the program we have to manually 
+free all the blocks allocated, by using the FreeMem function.
+
+ AllocMem
+ --------
+
+This Exec routine serves to request a block of memory to use for our purposes. 
+Just indicate the type of memory required (in practice if it must be CHIP ram 
+or not), and the length in bytes of this block.
+
+The routine ALLOCATES the piece of ram free for our exclusive use, as we take 
+possession of it, since the operating system will no longer write to that 
+piece of memory, until we "return" it to it, with freemem.
+
+In fact, the Amiga multitasking system works with this system: each program 
+requires how much memory it needs through AllocMem, the operating system 
+reserves pieces of free ram for it, then another program that loads in 
+multitasking will be allocated other parts of free ram.
+
+For now we have used the "SECTION BSS" for the cleared memory spaces we 
+needed, as we knew their size from the start.
+
+And it is better to use BSS for bitplanes or buffers of certain size, for 
+various reasons, such as not having to call routines and being able to put 
+labels here and there in the buffer, unlike the allocated mem which we would 
+have to access through offsets from the beginning of the block.
+
+In our listing, we load into memory a file of which we do not know the length, 
+so here it is mandatory to use the AllocMem, after we know how much space the 
+file will occupy.
+
+Let's see the function in detail:
+
+	move.l	Grandezza(PC),d0 ; Size of the block in bytes
+	move.l	TypeOfMem(PC),d1 ; Memory Type (chip,public...)
+	move.l	4.w,a6
+	jsr	-$c6(a6)	; Allocmem
+	move.l	d0,FileBuffer	; Start address of mem block. allocated
+	beq.s	FineMem		; d0=0? Error then!
+	...
+
+If it is not essential to allocate chipmem (ie if neither graphics nor sound 
+will go into the allocated buffer), always allocate "MEMF_PUBLIC", which means:
+"fast memory if there is, or if there really isn't then chip".
+
+I remind you for the umpteenth time that it is good to save chipmem, and that 
+FAST memory is faster than the chip.
+
+At the output, in d0 there will be the address of the requested memory block, 
+which among other things will be aligned to long word (ie aligned to 32 bits).
+
+If instead d0 = 0, it was not possible to allocate a block of this type!
+Always test this thing, or in case of mem end you would copy everything in $0!!!
+
+We can also request that the required memory be cleared, just set the 
+MEMF_CLEAR bit, 16 ($10000). Here are the most useful parameters to put in d1, 
+to request the various types of memory:
+
+MEMF_CHIP	=	2	; Request Chip Ram
+MEMF_FAST	=	4	; Request Fast Ram (don't use it)
+MEMF_PUBLIC	=	1	; Request Fast, but if there isn't, chip is okay
+
+And, of course, if you want the blocks to be cleared:
+
+CHIP		=	$10002
+FAST		=	$10004	; don't use it...
+PUBLIC		=	$10001
+
+I advise against requesting MEMF_FAST, because fast is not present on all 
+machines. Always use MEMF_PUBLIC, except when the allocated memory is to be 
+used as a bitplane, copperlist or audio, ie MEMF_CHIP.
+
+Note that the length of the block we specify will be rounded by the operating 
+system to a multiple of the system's chunks. This is not a problem for us, in 
+fact if we specify 39, it probably allocates 40, but the 39 requested are all 
+there, so we don't care.
+
+When exiting the program, remember to free the memory block!
+
+ FreeMem
+ -------
+
+This is the routine to call to free the allocated memory blocks.
+The block address is required in a1, and the length in bytes in d0.
+
+WARNING: If you try to free a block that was not really allocated, you will 
+cause a crazy mess with Guru Meditation / soft Failure!
+
+Here's how to free the memory block from earlier:
+
+	move.l	Grandezza(PC),d0  ; Size of the block in bytes
+	move.l	FileBuffer(PC),a1 ; Mem block address. allocated
+	move.l	4.w,a6
+	jsr	-$d2(a6)	; FreeMem
+
+	                               /T /I
+	                              / |/ | .-~/
+	                          T\ Y  I  |/  /  _
+	         /T               | \I  |  I  Y.-~/
+	        I l   /I       T\ |  |  l  |  T  /
+	     T\ |  \ Y l  /T   | \I  l   \ `  l Y
+	 __  | \l   \l  \I l __l  l   \   `  _. |
+	 \ ~-l  `\   `\  \  \\ ~\  \   `. .-~   |
+	  \   ~-. "-.  `  \  ^._ ^. "-.  /  \   |
+	.--~-._  ~-  `  _  ~-_.-"-." ._ /._ ." ./
+	 >--.  ~-.   ._  ~>-"    "\\   7   7   ]
+	^.___~"--._    ~-{  .-~ .  `\ Y . /    |
+	 <__ ~"-.  ~       /_/   \   \I  Y   : |
+	   ^-.__           ~(_/   \   >._:   | l______
+	       ^--.,___.-~"  /_/   !  `-.~"--l_ /     ~"-.
+	              (_/ .  ~(   /'     "~"--,Y   -=b-. _)
+	               (_/ .  \  :           / l      c"~o \
+	                \ /    `.    .     .^   \_.-~"~--.  )
+	                 (_/ .   `  /     /       !       )/
+	                  / / _.   '.   .':      /        '
+	                  ~(_/ .   /    _  `  .-<_
+	                    /_/ . ' .-~" `.  / \  \          ,z=.
+	                     ~( /   '  :   | K   "-.~-.______//
+	                       "-,.    l   I/ \_    __{--->._(==.
+	                       //(     \  <    ~"~"     //
+	                      /' /\     \  \     ,v=.  ((
+	                    .^. / /\     "  }__ //===-  `
+	                   / / ' '  "-.,__ {---(==-
+	                 .^ '       :  T  ~"   ll
+	                / .  .  . : | :!        \\
+	               (_/  /   | | j-"          ~^ 
+	                 ~-<_(_.^-~"
+
+At this point we can also see the program: Lesson11o3.s
+

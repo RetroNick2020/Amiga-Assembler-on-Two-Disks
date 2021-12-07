@@ -1,0 +1,3496 @@
+
+;	REFERENCE TABLE FOR 68000 PROGRAMMING - LEVEL 2
+
+	                            !     !
+		      _..'/\        |\___/|        /\-.._
+	           ./||||||\\.      |||||||      .//||||||\.
+	        ./||||||||||\\|..   |||||||   ..|//||||||||||\.
+	     ./||||||||||||||\||||||||||||||||||||/|||||||||||||\.
+	   ./|||||||||||||||||||||||||||||||||||||||||||||||||||||\.
+	  /|||||||||||||||||||||||||||||||||||||||||||||||||||||||||\
+	 '|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||`
+	'||||'     `|||||/'   ``\|||||||||||||/''   `\||||||'     `|||`
+	|/'          `\|/         \!|||||||!/         \|/'          `\|
+	V              V            \|||||/            V              V
+	`              `             \|||/             '              '
+	                              \./
+Author: Fabio Ciucci		       V
+
+Briefly the addressing modes:
+
+*******************************************************************************
+ move.l #123,xxxx	   ; Immediate: copy the value after the # into the
+			   ; destination.
+*******************************************************************************
+ move.l xxxx,$50000	   ; Absolute long (a longword, as far as the memory
+			   ; addresses in the computer go!).
+*******************************************************************************
+ move.l xxxx,$500.w	   ; Absolute short (address less than $7FFF)
+ 			   ; Example: "move.l 4.w,a6"
+*******************************************************************************
+ move.l	xxxx,D0		   ; Direct data register (a Dx data register can be
+			   ; accessed with .b, .w and .l)
+*******************************************************************************
+ move.l	xxxx,A0		   ; Direct address register (one can access only with
+			   ; .w and .l to an address register Ax, in fact a
+			   ; "move.b d0,a0", for example, would give an error,
+			   ; in the same way, "move.b a0,d0" is not assembled!)
+*******************************************************************************
+ move.l	xxxx,(a0)	   ; Indirect address register (that is, it is written
+			   ; not in the Ax register, but in the address present
+			   ; in that register; you can work with .b, .w and .l).
+*******************************************************************************
+ move.l	xxxx,(a0)+	   ; Indirect address register with post-increment
+ 			   ; (after copying, a0 is incremented by 1 if the
+			   ; instruction was .b, by 2 if .w and by 4 if .l)
+*******************************************************************************
+ move.l	xxxx,-(a0)	   ; Indirect address register with pre-decrement
+			   ; (first the register is decremented, by 1 if the
+			   ; instruction was .b, by 2 if .w and by 4 if .l,
+			   ; then the indirect copy takes place, i.e. in the
+			   ; address contained in the register
+*******************************************************************************
+ move.l	xxxx,$123(a0)	   ; Indirect address register with OFFSET (distance
+			   ; of addressing) - the copy is made in the address 
+			   ; resulting from the sum of the contents of the 
+			   ; address register plus the offset, which can 
+			   ; vary between -32768 and 32767 ($8000-$7fff)
+*******************************************************************************
+ move.l	xxxx,$12(a0,d0.w)  ; Indirect address register with OFFSET and INDEX
+ 			   ; In this case, the index is added as well as the 
+			   ; offset and the contents of the Ax register.
+			   ; offset can vary between -128 and +127 ($80 - $7f)
+			   ; the index is a data or address register of which 
+			   ; only its lower 16 bits or all 32 bits can be 
+			   ; considered. Examples:
+
+					move.l	$12(a1,d2.w),d0
+					move.l	$12(a1,d2.l),d0
+					move.l	$12(a1,a2.w),d0
+					move.l	$12(a1,a2.l),d0
+
+*******************************************************************************
+ move.l offset(PC),xxxx	   ; Relative to PC with OFFSET; normally the offset 
+			   ; is calculated by the assembler, putting a label 
+			   ; where we want to write, Ex:
+
+					move.l	label(pc),d0
+
+			   ; The label must be no further than $7fff because 
+			   ; the maximum offset is -32768 and 32767
+			   ; note: usually you can put the (PC) only to the 
+			   ; source operand, and not to the destination one, 
+			   ; for example "move.l d0,label(PC)" does not exist.
+			   ; The only instruction that allows this is the BTST:
+
+		btst.l	d0,label(pc)
+
+			  ; Similarly, 3 instructions that have only one 
+			  ; operand allow this addressing
+
+		jmp	label(pc)
+		jsr	label(pc)
+		pea	label(pc)
+
+*******************************************************************************
+ move.l offset(PC,d0.w),xxxx ; PC-Relative with OFFSET and INDEX; also in this 
+			     ; case the offset is calculated by the assembler 
+			     ; using the labels. Remember that the label 
+			     ; cannot be more than 127 bytes away from the 
+			     ; instruction, as the offset max -127, + 127
+
+		move.l	LabCanez(pc,d2.w),d0
+		move.l	LabGatto(pc,d2.l),d0
+		move.l	LabTopol(pc,a2.w),d0
+		move.l	Labella1(pc,a2.l),d0
+
+			    ; As we have seen for indexless addressing, you 
+			    ; can only use this addressing for the source 
+			    ; operand, not the destination one. For example:
+			    ; "move.l d0,Labella1(pc,a2.l)" does not exist!
+			    ; Only the BTST allows it in the second operand:
+
+		btst.l	d0,label(pc,a2.w)
+
+			    ; And 3 single operand instructions:
+
+		jmp	label(pc,d2.l)
+		jsr	label(pc,d2.w)
+		pea	label(pc,d2.w)
+
+*******************************************************************************
+ move.w d1,SR		    ; Status Register
+*******************************************************************************
+ move.w	d1,ccr		    ; Condition Code Register
+*******************************************************************************
+
+Even more briefly:
+
+Addressing modes					Syntax
+----------------					------
+
+Data register directly					  Dn
+Address register directly				  An
+Address register indirectly				 (An)
+Address register indirectly with Post-Increment		 (An)+
+Address register indirectly with Pre-Decrement		 -(An)
+Address register indirectly with Offset (max 32767)	 w(An)
+Address register indirectly with Offset and Index	b(An,Rx)
+Absolute short						   w
+Absolute long						   l
+Program Counter with Offset (calculated by assembler)	 w(PC)
+Program Counter with Offset and Index			b(PC,Rx)
+Immediate						  #x
+Status Register						  SR
+Condition Code Register					  CCR
+
+
+******************************************************************************
+
+			THE STATUS REGISTER: SR
+
+SR - Status Register: the 16 bits of this register are used only when the 
+processor is in supervisor mode; otherwise the 8 least significant bits, 
+called Condition Code Register (CCR), are available to the programmer. Let's 
+see in detail the functions of SR:
+
+bit 0 - Carry (C): set to 1 when the result of an addition generates a carry, 
+or when a subtrahend is greater than the minuend, ie when a subtraction has 
+required a "loan". The Carry bit also contains the more or less significant 
+bit of an operand subjected to a shift or rotation. It is set to zero when 
+there are no carryovers or "loans" in the last operation.
+
+bit 1 - Overflow (V): it is set if the result of the last operation between 
+signed numbers is too large to be contained in the destination operand, for 
+example if this result exceeds the limits -128 .. +127 in the byte field. For 
+example, the sum.b 80 + 80 generates an oVerflow, having exceeded +127. In the 
+.w field the limits are -32768 .. + 32767, and in the .l field they are - / + 
+2 billion. Note that the sum 80 + 80 in the byte field does not set the Carry 
+and eXtend flags, but only the oVerflow one, since 160 does not exceed 255, 
+the maximum that can be contained in a byte for normal numbers.
+
+bit 2 - Zero (Z): set when the operation generates the result zero (also 
+useful for controlling the decrement of a counter), as well as when comparing 
+two identical operands.
+
+bit 3 - Negative (N): it is set to 1 if in an operation the high bit of the 
+number, in two's complement format, is set. In practice, if the result is a 
+negative number, this bit is set, otherwise it is reset.
+The two's complement is obtained by making the operand's complement to one (ie 
+by inverting all the bits), then adding 1; for example, +$26 in binary is 
+%000110010; its one's complement is %11100101 (inversion of bits 0 into bits 1 
+and vice versa); adding 1 gives %11100110.
+Bit 7, called sign bit, is copied to bit 3 of the Status Register;
+In the case of -$26, for example, N is set, indicating a negative number.
+
+bit 4 - Extend (X): is a repetition of the Carry bit, and is used in 
+operations performed in BCD (Binary Coded Decimal: the decimal number 20, for 
+example, is not represented with 00010100, but in the form two tens, zero 
+units 0010 0000) and in extended binary operations such as ADDX and SUBX, 
+particular versions of the addition and subtraction instructions ADD and SUB.
+
+Terminology:
+
+Nibble:
+Half of a byte. Not directly addressable, but extractable from the byte by 
+means of shifts and rotations. In a byte we distinguish the right nibble 
+(called "low" or "less significant") from the left nibble (called "high" or 
+"most significant").
+
+Stack:
+Literally "stack". it is a memory area intended for storing register values 
+according to the LIFO principle, last in first out (the last value inserted, 
+being at the top of the stack, is also the first to be extracted). When, 
+during the program, a branch is made to a subroutine, the value of PC (Program 
+Counter) is saved on the stack, which is "taken" as a return address when the 
+subroutine has finished.
+
+
+DIRECTIVES AND CHARACTERISTICS OF THE ASSEMBLER:
+
+The assembler used, in our case ASMONE, who transforms the listing from ascii 
+text format into the binary values corresponding to the instructions and data 
+contained in the listing itself, has certain special conventions and 
+directives that one needs to know, in addition to the knowledge of the true 
+68000 instructions and properties listed in this text.
+
+First of all, if the .b, .w or .l is not specified in the operation, the .w is 
+always assumed; an example:
+
+	move	d0,d1
+
+It is assembled as "MOVE.W d0,d1". Similarly a:
+
+	move	d0,12(a0,d0)
+
+It is assembled as
+
+	MOVE.W	D0,$0C(A0,D0.W)
+
+Therefore also the register used as an index, d0, is considered as d0.w.
+For this reason it is ALWAYS worth specifying the various .b, .w and .l in the 
+instructions, or we will never be sure how everything can be assembled, 
+especially by different assemblers.
+
+There are also other peculiarities, for example for instructions such as ASL, 
+ASR, LSR, ROL, ROR, ROXL, ROXR, which when they SHIFT by only one bit, can be 
+written in these two forms:
+
+	(form1)
+		ROL.w	#1,d3
+		ROL.w	#1,(a0)
+	(form2)
+		ROL.w	d3
+		ROL.w	(a0)
+
+Of course, when the shift is greater than 1, it must be specified!
+
+	Example:
+		ROL.W	#3,d3
+
+Another IMPORTANT operation performed by the assembler is to automatically 
+recognize when it is appropriate to use MOVEA or MOVE, in fact there are two 
+specific instructions: the MOVE for generic copies, except for copies to 
+ADDRESS registers An, which are made by the MOVEA.
+
+Indeed:
+		MOVE.W	#10,d0
+		MOVE.W	d1,d2
+
+These operations are the responsibility of the MOVE, while:
+
+		movea.w	d1,a0
+		movea.l	a1,a0
+		movea.w	(a1),a0
+
+They are operations towards Address Registers, therefore they are MOVEA!!! In 
+reality, it is not necessary to notice every time we make a MOVE whether it is 
+a MOVE or a MOVEA, because ASMONE does it for us. Just always specify MOVE:
+
+		move.w	a1,a0
+		move.l	d0,d1
+		move.l	(a1),a4
+
+These 3 instructions will be assembled correctly, the first and third as MOVEA 
+and the second as MOVE. You can even specify the MOVEA when it is not correct, 
+and the right MOVE will be assembled:
+
+		movea.l	d0,d1
+
+It will be assembled as MOVE.L d0, d1.
+
+The same goes for ADD,ADDI,ADDA ; SUB,SUBI,SUBA ; AND,ANDI ; CMP,CMPA,CMPI
+EOR,EORI ; OR,ORI: let's take the case of the ADD as an example for all these 
+groups of instructions: there are 3 types of ADD, which perform the same 
+addition operation, but on different operands. Well, if you have to do a sum 
+like this:
+
+	ADD.W	d0,d1
+
+In other words, between registers, for example, the simple ADD is enough, 
+while if you have to add to an address register, there is the appropriate ADDA:
+
+	ADDA.L	d0,a1
+
+If you need to add a constant, with the #immediate addressing, there is the 
+appropriate ADDI:
+
+	ADDI.W	#10,d0
+
+Well, we should always write the ADDs paying attention to the case:
+
+		add.l	(a1),d0
+		addi.b	#$12,(a1)
+		add.b	label(pc,d2.w),d0
+		adda.l	(a1),a0
+		add.w	$12(a1,d2.l),d0
+		adda.w	(a1)+,a0
+		add.b	$12(a1,d2.w),d0
+		adda.w	label(pc),a0
+		addi.w	#$1234,$1234.w
+
+Naturally, almost all assemblers always accept ADD in compilation and 
+correctly assemble the ADDI / ADDA / ADD as appropriate:
+
+		add.l	(a1),d0
+		add.b	#$12,(a1)
+		add.b	label(pc,d2.w),d0
+		add.l	(a1),a0
+		add.w	$12(a1,d2.l),d0
+		add.w	(a1)+,a0
+		add.b	$12(a1,d2.w),d0
+		add.w	label(pc),a0
+		add.w	#$1234,$1234.w
+
+So always write ADD, saving yourself from dividing the instruction in the 3 
+different cases, it is still an ADD.
+The same goes for the other instructions which have the "little brother" 
+ending in "A" for the address registers and the one ending in "I" for the 
+constants. Therefore, always write:
+
+	MOVE	- for instructions MOVE,MOVEA
+	ADD	- for instructions ADD,ADDI,ADDA
+	SUB	- for instructions SUB,SUBI,SUBA
+	AND	- for instructions AND,ANDI
+	CMP	- for instructions CMP,CMPA,CMPI
+	EOR	- for instructions EOR,EORI
+	OR	- for instructions OR,ORI
+
+The inventors of assemblers have thus saved us 10 instructions by "merging" 17 
+into 7 only. But if you are a maniac and aesthetes of the listing, you can 
+specify all 17 (mah!).
+
+An advice: when you act on an address register, for example:
+
+	MOVEA.L	xxxx,Ax
+	CMPA.L	Ax,Ax
+	ADDA.L	xxxx,Ax
+	SUBA.L	xxxx,Ax
+
+Always use the extension .L, and never .W, because the addresses are a 
+longword long, and above all because these instructions on registers do not 
+act like the others for .W addressing, especially since they do not allow .B 
+addressing : in fact, a MOVEA.W or an ADDA.W acts not on the low word of the 
+address register, but on the entire address, obtaining the "missing" high word 
+by filling it with a replica of bit 15 of the low word. So something similar 
+to the EXT (have a look at) instruction happens, and this can be FATAL for 
+some routines, in fact this "extension" causes, for example, an ADD.W 
+#$5000,a0 to add the value $00005000, because the bit 15 by $5000 is zeroed, 
+while an ADD.W #$B000,A0 causes an increase of $FFFFB000, which is VERY 
+dangerous.
+
+Another convention is that register A7 can also be referred to as SP:
+
+	movem.l	d0-d7/a0-a6,-(SP) <-> movem.l d0-d7/a0-a6,-(a7)
+
+Let's continue with the conventions: we know that to define a comment area it 
+is necessary to precede the text of the comment with a ";", but you can also 
+precede it with an asterisk "*":
+
+	move.l	4.w,a6	* commento!
+
+But, in reality, after the instruction you could put the comment directly 
+without preceding it with "*" or ";"
+
+	move.l	4.w,a6	commento!
+
+However, not all assemblers allow this, and it also depends on the preference 
+settings of the various assemblers, so always put the ";" before your comments.
+
+There are also EQUATES, that is, symbols that we can define and use instead of 
+the numbers in the listing:
+
+NumeroPlanes	EQU	5
+
+	move.w	#NumeroPlanes,d0	; assembled as MOVE.W #5,d0
+
+Equates are defined in a similar way to labels, they can have any name and 
+must not be spaced from the beginning, but unlike labels, they must not end 
+with ":". You can also use the "=" symbol in place of the EQU.
+
+-	-	-	-	-	-	-	-	-	-
+
+Of course, if there are operations or expressions in the listing, they are 
+resolved in the assembly phase, like it is done by typing the expression with 
+the command "?" of the ASMONE command line:
+
+	MOVE.W	#(10*3)+2,D0	; It will be assembled as MOVE.W #32,d0
+	MOVE.W	#(30/3)+2,d0	; It will be assembled as MOVE.W #12,d0
+	
+Similarly, the Equates defined can also be used for calculations:
+
+	move.w	#NumeroPlanes*2,d0
+
+Or you can specify Offsets from some labels:
+
+	MOVE.b	d0,SPRITE+1
+	MOVE.b	d1,SPRITE+2
+	MOVE.b	d2,SPRITE+3
+
+We have already seen that this is equivalent to making 3 labels for each byte 
+after the SPRITE label. For example, to write 100 bytes after a label:
+
+	MOVE.B	d0,label+100
+
+And so on. The Offset in memory will be calculated as if there was a label at 
+that point, 100 bytes after the label (the number always counts 1 byte!!!).
+
+Finally, you can even specify a LABEL-EQUATE, for example:
+
+HSTART:	EQU	*+1
+VSTOP:	EQU	*+2
+
+MIOSPRITE:		; length 13 lines
+	dc.b $50	; VSTART
+	dc.b $90	; HSTART
+	dc.b $5d	; VSTOP
+	dc.b $00
+	...
+
+In this case, the "*" is used after the EQU, which means "THIS ADDRESS", then 
+we can translate into:" HSTART: this address+1", etcetera.
+Instead of placing the labels between one byte and another, we have defined 
+them at a certain distance from that byte, but we have written the "offset" 
+from that point.
+Referring to HSTART and VSTOP, we will refer to the bytes indicated, as if the 
+labels were placed at that point. (Example: "M HSTART": 90 5c 00 ....)
+This trick of the "*" after the EQU, can also be used for Bcc:
+
+	move.l	d1,d2
+;*-6
+	move.b	(a1),d0
+;*-2
+	cmp.b	(a1),d0
+	beq.s	*-2
+	dbra	d2,*-6
+
+In this case we can calculate the offset of the Bcc and the DBcc instead of 
+the assembler. (I put some ";" to indicate offsets as labels to make it 
+clearer). Using labels, however, is certainly more convenient.
+
+It might be useful when using the "REPT" directive, which repeats a given 
+piece of data or code:
+
+	REPT	100	; 100 times
+
+	dc.b	"ciao"
+
+	ENDR	; end of the part to be repeated
+
+With this directive we write "Ciao" in memory 100 times. Of course, if you 
+were to use LABELS, the "label already exists" error would occur, so you could 
+use the previous trick:
+
+
+	REPT	100	; 100 times
+
+	move.l	d1,d2
+;*-6
+	move.b	(a1),d0
+;*-2
+	cmp.b	(a1),d0
+	beq.s	*-2
+	dbra	d2,*-6
+
+	ENDR
+
+There is the "SET" command, which "defines a variable" so that you can, 
+through the REPT, create tables or instructions in sequence, for example, to 
+create a table with multiples of 2:
+
+TABELLA:
+	dc.b	0,2,4,6,8,10,12,14,16,18
+
+We can also write:
+
+
+TABELLA:
+
+A set 0		; A equals 0
+
+	Rept	10	; do the piece 10 times from here to ENDR
+
+	Dc.b	A*2	; put (with dc.b) A*2 into memory
+A set A+1		; At the next "loop" A is worth A+1
+
+	Endr
+
+However, the REPT command does not exist in all assemblers, and often makes 
+the listing less clear. it is best not to use it, unless it saves a lot of 
+"manual" writing work.
+
+To finish this part, here are the operations that can be inserted in the 
+"expressions" solved during the assembly, which can also be used when using 
+the "?" to calculate from the command line:
+
+
+	()	Parenthesis	; Ex: (10*2)*(3+5)
+	*	Multiplication
+	+	Addition
+	-	Subtraction
+	/	Division
+	^	Power	      (ex: "moveq #2^4,d0", assembles "moveq #16,d0")
+
+There are also LOGIC bit operators:
+
+	&	AND	(Ex: %01010101 & %00001111 = %00000101
+	!	OR	(Ex: %00110011 ! %11000011 = %11110011
+	~	EOR	(Ex: %00110011 ~ %11000011 = %11110000
+	>>	Shift to the right (Ex: $50>>2 = $14) (%01010000>>2 = 00010100)
+	<<	Shift to the left (like LSL) (Ex: $14<<2 = $50)
+
+These can be very useful, for example to "break" some .l values into two 
+words, etc. Let's say you want to divide a value along a word, putting the low 
+8 bits in one destination and the high 8 bits in another. We can define an 
+Equate, and let the ASMONE "break" the value, so we can simply change that 
+equate each time:
+
+
+MICS	equ	2000
+
+
+	move.b  #(MICS&$FF),$400(a4)	; put the low byte of the time
+	move.b  #(MICS>>8),$500(a4)	; put the high byte of the time
+
+Therefore, (MICS & $FF) means MICS AND $00FF, and as we know the AND clears 
+the bits that are at zero in the second operand and leaves unchanged, in this 
+case, the first 8, that is $FF (%11111111). Since MICS = 2000, that is $07d0, 
+in this case the operation is $07d0 AND $00FF, so the result is $00d0, that is 
+the LOW BYTE of the word. The instruction is assembled like this:
+
+	MOVE.B	#$D0,$400(A4)
+
+As for MICS >> 8, it is equivalent to $07d0 LSR 8, so the result is the high 
+"moved" byte instead of the low one: $0007:
+
+	MOVE.B	#$07,$500(A4)
+
+You can also split addresses of a longword in the 2 words, to be placed for 
+example in the pointers to the bitplanes:
+
+INDIRIZZO	EQU	$75000
+
+Copperlist:
+	dc.w	$e0,INDIRIZZO>>16	; high word of the address in BPL0PTH
+	dc.w	$e2,INDIRIZZO&$FFFF	; low word of the address in BPL0PTL
+
+Everything will be assembled like this:
+
+	dc.w	$e0,$0007
+	dc.w	$e2,$5000
+
+However it is better to point the bitplanes with a routine and not to use 
+absolute (FIXED) addresses. These operators are very useful, always keep them 
+in mind.
+
+Let's continue with the directives:
+
+	END	; indicates the end of the listing, what appears after the END 
+		; is not assembled
+
+Then there are the directives regarding the alignment to even or odd addresses:
+
+	EVEN	; align to EVEN address (word alignment, 16 bit)
+	ODD	; align to ODD address
+
+Even works when the "Word at odd address" error occurs.
+Otherwise it can be aligned to LongWord (32 bit), or to 64 bit. For example, 
+in the AGA CHIPSET, certain graphics resolutions require the bitplanes to be 
+at multiple addresses of 64 bits, and this directive is indispensable.
+To align we use CNOP:
+
+	CNOP	Size[,Offset]
+
+	cnop	0,2	; align to word (16 bit) equivalent of EVEN
+	cnop	0,4	; aligns to longword (32 bit)
+	cnop	0,8	; aligns to addresses divisible by 8 (64 bit)
+	cnop	0,16	;...
+
+About the alignment, REMEMBER THAT on an odd address you can only operate in 
+.b, otherwise a MOVE.W or MOVE.L #xxx,address causes a total crash with reset 
+and GURU MEDITATION / SOFTWARE FAILURE.
+
+Another very important directive is the DC.x, which allows you to store bytes, 
+words and longwords, especially Copperlist or Tables:
+
+	dc.w	$1234,$4567,$8901,$2345...
+
+Or for labels used as variables with a solitary word / long:
+
+GfxBase:
+	dc.l	0
+
+If you write some text, use the dc.b and put the text between " " or ' '
+
+	dc.b	"Testo ASCII",$10,$11
+
+And you can also put some decimal / hexadecimal / binary value on the same 
+line, just separate them with commas. Remember that after a text or in any 
+case a dc.b it is necessary to put EVEN to equalize any odd address formed!
+
+Its variant is the DCB.x, which stores various bytes, words or longwords all 
+the same, for example:
+
+	dcb.b	100,$55		; store 100 consecutive $55 bytes in memory
+	dcb.b	50,$00		; 50 bytes cleared
+
+This directive can also be called BLK, for compatibility with the old (but 
+mythical) SEKA, however DCB is universally used.
+
+For SECTION BSS, which are made up of blank spaces only, the "DS.x [number]" 
+directive is used to specify how much space to occupy:
+
+	ds.b	100	; 100 bytes cleared
+
+About SECTION, the SECTION are a directive of the assembler, which has the 
+function of allocating the parts of the code in CHIP or in FAST ram according 
+to their nature. In crappy or ancient computers, for example MSDOS or other 
+archaeological finds, there is no multitasking and relocation of programs in 
+the memory, in fact the programs are made to go to certain precise memory 
+addresses, while on the amiga each program can be "relocated" , ie copied in 
+any free memory area, in this way various programs can stay in memory at the 
+same time, at different addresses.
+Oh well, on windows they made it load more than one program in memory, but 
+each one works alone, without multitasking HAHAHAHAHAHAH!
+However, the effect of these directives is seen when the executable is saved 
+with "WO", in fact in the Amiga executable format there are the Hunks, that is 
+the pieces of memory decided with the SECTION, which are allocated by the 
+mythical Operative system of the Amiga.
+However, when we assemble and Jump from ASMONE, if the AutoAlloc option is not 
+activated, all the sections are assembled in CHIP (If we answered C to 
+ASMONE's initial question!). The ASMONE has this option turned off by default. 
+You can activate it from the Project/Preferences../AutoAlloc menu.
+However AutoAlloc takes up more memory, since in addition to the memory 
+allocated at the beginning, each time it allocates MORE for the sections.
+The SECTION can be CODE, DATA or BSS, and go to CHIP or PUBLIC, that is to say 
+in any memory. To indicate that it goes in chip, a _C is added:
+
+	Section	Grafica,DATA_C	; Data, in CHIP!!!
+
+Another VERY USEFUL directive is the INCBIN, which loads data from disk and 
+puts them in memory at the point where the bin itself is located:
+
+	INCBIN	"nomefile"
+
+A similar directive is INCLUDE "filename", which instead includes an ASCII 
+text, which is a piece of source, which is assembled together with the rest of 
+the code.
+It can be used to include "universally used" routines, such as the initial 
+Startup or music routine. However, I advise you not to use the INCLUDE too 
+much, because then you get to the point of not knowing what is in the listing 
+anymore, and if you lose one of the files to include, goodbye assembly!
+
+Directive associated with INCBIN and INCLUDE is INCDIR, which establishes 
+which directory to load files from. Beware, however, that the last INCDIR also 
+applies to all the listings loaded later, so if the files to be included are 
+somewhere else you must reset the INCDIR. Example:
+
+	INCDIR	"dh0:sorgentozzi/mieifiles"	; specifies a dir
+
+	INCDIR	""	; Reset the directory, the directory becomes the 
+			; current one
+
+I advise you not to fill your sources with INCDIR and INCLUDE, because then if 
+you find yourself, for example, having to bring your listing to show to a 
+friend, you will have to copy your poor source divided into about fifty small 
+files on the disk, and it will be hard to find them all in the various 
+directories of the hard disk. Finally, once you get to this friend, you will 
+have to change all the INCDIR Paths, and maybe you will find that a file is 
+missing and you have to give up showing the program running.
+A clever use of INCBIN / INCLUDE can be this: as far as the INCBIN is 
+concerned, all the smaller data, under 5Kb, for example sprites or small 
+tables, can be included in the listing in DC.x format, while for the images or 
+music, larger than 5K, it will be convenient to load them with INCBIN: in this 
+way the "loose" files are as few as possible, and the listing is short.
+For the INCLUDEs the same: at most you can use the include for the music 
+routine or for the startup, but nobody forbids not to use INCLUDE at all. In 
+the course it was used to include the "Startup1.s", more than anything else to 
+save space, which on a disk is not very much.
+Do you want to deny the satisfaction of doing "A" and "J" and see immediately 
+a dozen 3D solids with about fifty balls and the equalizers without 30 minutes 
+of INCLUDE loading????
+
+There would also be conditional assemblies (IF, ENDIF, ELSE), but they are not 
+the end of the world, if they are needed they will be explained later.
+
+The MACROs (MACRO, ENDMs) will also be explained, eventually, later on, since 
+they are only a kind of EQUATE of various instructions, and can be largely 
+done without.
+
+As for the Local Labels (those preceded by the ".") I think they are a stupid 
+frivolity, for those who have no imagination and cannot come up with names for 
+their labels. Oh well, maybe I was exaggerated, however I do not think they 
+have a particular usefulness. So please don't make me sources with a dot 
+preceding label, or you will move away from my coderistic ideological current.
+
+-	-	-	-	-	-	-	-	-	-
+
+A couple of directives that are no longer fashionable nowadays, but that could 
+be useful are ORG and LOAD, which are used in practice to allocate the 
+instructions in our listing to FIXED, ABSOLUTE, NON-RELOCATABLE addresses.
+Obviously these instructions were used at the time when those demos were made 
+that today in fact do not work on modern computers, since IF YOU MAKE A DEMO / 
+GAME IN EXECUTABLE FILE FORMAT, THERE MUST NOT BE ABSOLUTE ADDRESSES, BUT ONLY 
+SECTION!
+The use of ORG and LOAD remained to make a demo / autoboot game, that is a 
+TRACKMO (demo on tracks with non dos loading) or an old type game. On the 
+other hand, the latest demos and the latest games are increasingly installable 
+on Hard Disk, especially the BEST demos and the BEST games (see BANSHEE and 
+BRIAN THE LION for games).
+I really believe that autoboot disks will disappear in the next few years, 
+because they are not installable on HD, nor easily convertible to CD32 or 
+CD-ROM, and the only certain thing is that HDs and CD-ROMs will be more and 
+more popular.
+it is also the fact that EVERYTHING being installed on HD has made MSDOS PCs 
+so popular (even bribes, you know).
+In this course I thought I'd include a large part on how to make a hard disk 
+loader, and maybe a copier at XCOPY / DCOPY, since I started programming one 
+year ago. But in light of reality, I instead decided not to deal with MFM 
+loading via hardware or autoboot at all, because I would teach you to do 
+something that would penalize your production!!!! The best option is to upload 
+files with the operating system, ie DOS.LIBRARY, as the latest and best 
+productions do.
+So I urge you to program only executable files, to be saved with "WO", wary of 
+obsolete autoboots and, worse, to start the listing like this:
+
+	ORG	$30000	; organizes the code with absolute addresses from $30000
+	LOAD	$30000	; assemble at $30000
+
+Also because if you have 1MB or 2MB of chip without FAST, like A500+ / A600 
+and basic A1200, ASMONE itself is loaded at $30000, which will be overwritten 
+and everything will go into GURU MEDITATION. (I still remember in the smau of 
+91 or 92, the stupid children loading ASMONE on the A600 and wondering why the 
+stolen or copied sources, they wanted to pass as their doing, didn't work, 
+HAHAHAHA! Well, they were sources they had found on disks back in 1987-1988, 
+and they were full of ORG and LOAD HAHAHAHAH!).
+
+-	-	-	-	-	-	-	-	-
+
+Then there are other particularities at the level of assembly that depend on 
+the settings of the ASMONE, and they are:
+
+From the menu: Assembler/assemble../Ucase=Lcase
+
+This option means Upper case = Lower case, and refers to the uppercase or 
+lowercase letters that make up the LABEL. Normally this option is set, 
+therefore the assembler considers uppercase and lowercase letters equally, and 
+you can write:
+
+LaBel1:
+	btst	#6,$bfe001
+	bne.s	labEL1
+
+That is, it is enough that the "word" that constitutes the label is the same, 
+even if the uppercase and lowercase letters are different. With Ucase = Lcase 
+disabled, however, the two labels would be considered different, and there 
+would be an error message, you should write:
+
+Label1:
+	btst	#6,$bfe001
+	bne.s	Label1
+
+Or in any case, each label should be the same, even as regards the arrangement 
+of upper and lower case. Since we usually forget which characters we put 
+uppercase and which lowercase, it is better to leave it set, long live freedom!
+
+A note on labels: the command "=S" from the command line shows the SYMBOLTABLE 
+which is the list of all the labels with the offsets.
+
+Last note: if you compile a source with a million labels, when you save the 
+executable with "WO" everything goes into GURU MEDITATION, unless you run a 
+nice "stack 20000" before running ASMONE.
+
+******************************************************************************
+
+Legend:
+-------
+   Dn	Data Register		(n between 0-7)
+   An	Address Register	(n between 0-7 - A7 is also called SP)
+    b	8-bit constant		( from -128 ($80) to +127 ($7f) )
+    w	16-bit constant		( from -32768 ($8000) to +32767 ($7fff) )
+    l	32-bit constant		( maximum $FFFFFFFF )
+    x	8-, 16-, 32-bit constant
+   Rx	Index register; among these there may be:
+
+		Dn.W	16 bits Data Register low-word
+		Dn.L	All 32 bits of a Data Register
+		An.W	16 bits Address register low-word
+		An.L	All 32 bits of an Address Register
+
+                           --------------------------
+
+ 
+ \==================================|                    _=_ 
+  \_________________________________/              ___/==+++==\___ 
+	       """\__      \"""       |======================================/ 
+		     \__    \_          / ..  . _/--===+_____+===--"" 
+			\__   \       _/.  .. _/         `+' 
+     USS ENTERPRISE	 \__ \   __/_______/                      \ / 
+	NCC-1701	  ___-\_\-'---==+____|                  ---==O=- 
+		    __--+" .    . .        "==_                     / \ 
+		    /  |. .  ..     -------- | \ 
+		    "==+_    .   .  -------- | / 
+			 ""\___  . ..     __==" 
+			       """"--=--"" 
+ 
+ 
+
+	                                  _____
+	                              _.-'     `-._
+	                           .-'  ` || || '  `-.
+	 _______________  _      ,'   \\          //  `.
+	/               || \    /'  \   _,-----._   /   \
+	|_______________||_/   /  \\  ,' \ | | / `.  //  \
+	   |    |             _] \   / \  ,---.  / \   // \
+	   |     \__,--------/\ `   | \  /     \  / |/   - |
+	   )   ,-'       _,-'  |- |\-._ | .---, |  -|   == |
+	   || /_____,---' || |_|= ||   `-',--. \|  -| -  ==|
+	   |:(==========o=====_|- ||     ( O  )||  -| -  --|
+	   || \~~~~~`---._|| | |= ||  _,-.`--' /|  -| -  ==|
+	   )   `-.__      `-.  |- |/-'  | `---' |  -|   == |
+	   |     /  `--------\/ ,   | /  \     /  \ |\   - |
+	 __|____|_______  _    ] /   \ /  `---'  \ /   \\ /
+	|               || \   \  //  `._/ | | \_.'  \\  /
+	\_______________||_/    \   /    `-----'    \   /
+	                         `.  //           \\  ,'
+	                           `-._   || ||   _,-'
+	                               `-._____,-'
+
+
+                           --------------------------
+
+;	LIST OF ALL 68000 INSTRUCTIONS:
+
+NOTE: there are instructions almost never used not described, such as ABCD, 
+SBCD, LINK, UNLK, neither the TAS instruction, which should not be used on 
+Amiga, nor ILLEGAL or RESET, which generate only an exception and a reset of 
+the peripherals.
+
+
+Legend:
+
+Condition codes:
+
+	C	Carry (that is, carry over)
+
+	V	Overflow (Out of size)
+
+	Z	Zero
+
+	N	Negative
+
+	X	Extend
+
+	Condition codes states:
+
+Symbol   Meaning
+------   -------
+
+   *     Set according to the result of the operation
+   -     Not modified
+   0     Cleared
+   1     Set
+   U     Status after operation UNDEFINED
+   I     Set from the immediate data
+
+	Other symbols for addressing:
+
+<ea>     Effective addressing operand
+<data>   Immediate data
+<label>  Assembler Label (ASMONE)
+<vector> Instruction exception vector TRAP (0-15)
+<rg.lst> list of registers of the MOVEM instruction
+
+							       Condition Codes
+							       ---------------
+					  Assembler   Data
+Instruction Description		           Syntax     Size        X N Z V C
+-----------------------                   ---------   ----        ---------
+***************************************************************** X N Z V C ***
+ADD      Binary addition                   Dn,<ea>     BWL        * * * * *
+                                           <ea>,Dn
+
+	NOTE: there are 3 types of dedicated ADDs: for data registers (ADD), 
+	for address registers (ADDA) and for constants (ADDI). However, the 
+	assembler accepts the simple ADD also to specify ADDA and ADDI, so you 
+	can always write ADD even when address registers or constants are 
+	added, it will be the assembler who assembles it as ADDA or ADDI as 
+	appropriate.
+
+	Sum of 2 binary values, result saved in the target operand.
+	FLAG: Carry and eXtend = 1 if a carryover occurs, otherwise = 0
+	Negative = 1 if the result is negative, Negative = 0 if it is positive.
+	oVerflow = 1 if the result exceeds the .b, .w or .l size of the ADD
+	Zero = 1 if the result is Zero
+
+	Examples:
+
+	Dn,<ea>
+		add.b	d0,d1
+		add.w	d0,(a1)
+		add.l	d0,(a1)+
+		add.b	d0,-(a1)
+		add.w	d0,$1234(a1)
+		add.l	d0,$12(a1,d2.w)
+		add.b	d0,$12(a1,d2.l)
+		add.b	d0,$12(a1,a2.w)
+		add.w	d0,$12(a1,a2.l)
+		add.l	d0,$1234.w
+		add.w	d0,$12345678
+
+	<ea>,Dn
+		add.b	d1,d0
+		add.w	a1,d0		;note: only add.w and add.l from reg. Ax
+		add.l	(a1),d0
+		add.w	(a1)+,d0
+		add.b	-(a1),d0
+		add.l	$1234(a1),d0
+		add.b	$12(a1,d2.w),d0
+		add.w	$12(a1,d2.l),d0
+		add.w	$12(a1,a2.w),d0
+		add.b	$12(a1,a2.l),d0
+		add.l	$1234.w,d0
+		add.w	$12345678,d0
+
+		add.w	label(pc),d0
+		add.b	label(pc,d2.w),d0
+		add.l	label(pc,d2.l),d0
+		add.w	label(pc,a2.w),d0
+		add.b	label(pc,a2.l),d0
+
+***************************************************************** X N Z V C ***
+ADDA     Binary addition in An register    <ea>,An     -WL        - - - - -
+
+	Like ADD, but dedicated to additions on address registers, therefore 
+	only adda.w and adda.l, not adda.b, are possible.
+	Note that arithmetic FLAGs are not affected by this operation, unlike 
+	ADD.
+
+	Advice: ALWAYS use the .L extension
+
+	Example:
+
+	<ea>,An
+		adda.l	d1,a0
+		adda.l	a1,a0
+		adda.l	(a1),a0
+		adda.l	(a1)+,a0
+		adda.l	-(a1),a0
+		adda.l	$1234(a1),a0
+		adda.l	$12(a1,d2.w),a0
+		adda.l	$12(a1,d2.l),a0
+		adda.l	$12(a1,a2.w),a0
+		adda.l	$12(a1,a2.l),a0
+		adda.l	$1234.w,a0
+		adda.l	$12345678,a0
+		adda.l	label(pc),a0
+		adda.l	label(pc,d2.w),a0
+		adda.l	label(pc,d2.l),a0
+		adda.l	label(pc,a2.w),a0
+		adda.l	label(pc,a2.l),a0
+
+		adda.l	#$1234,a1	; note: when a constant has to be 
+					; "ADDED" to an address register, the 
+					; instruction is not addi, but adda, 
+					; and cannot be .b.
+
+	; Also, the function of .w and .l is different from the common one:
+	; operating on ADDRESS registers, each time one operates on the whole 
+	; address, that is, on the whole LONGWORD. So, if we do ADD.W #$12,a0 
+	; or ADD.L #$12,a0 there are no differences, because in both cases we 
+	; have added $12, which is a positive number that can be contained in 
+	; a word. However, you must pay attention to the fact that if the .w 
+	; number you want to add is greater than $ 7fff, it will happen that 
+	; the value of the sign bit will be copied into bits from 16 to 31, 
+	; let's take an example:
+
+		lea	$1000,a0
+		ADDA.W	#$9200,a0	; add $FFFF9200 to a0
+
+	; In this case the result is $FFFFA200, a really bad address!
+	; So be careful to use ADDA.L almost always, because this feature of 
+	; the 32-bit extension of the sign is common to all ADDA addressing. 
+	; (as well as SUBA,CMPA,MOVEA)
+
+***************************************************************** X N Z V C ***
+ADDI     Addition with Immediate data      #x,<ea>     BWL        * * * * *
+
+	Sum of an #Immediate value, that is of a constant, to the destination.
+	the Flags behave as in the ADD instruction:
+	FLAG: Carry and eXtend = 1 if a carryover occurs, otherwise = 0
+	Negative = 1 if the result is negative, Negative = 0 if it is positive.
+	oVerflow = 1 if the result exceeds the .b, .w or .l size of the ADD
+	Zero = 1 if the result is Zero
+
+	Example:
+
+	#x,<ea>
+		addi.w	#$1234,		d1	; the destinations have been
+		addi.b	#$12,		(a1)	; spaced for greater readability
+		addi.l	#$12345678,	(a1)+
+		addi.w	#$1234,		-(a1)
+		addi.b	#$12,		$1234(a1)
+		addi.w	#$1234,		$12(a1,d2.w)
+		addi.l	#$12345678,	$12(a1,d2.l)
+		addi.w	#$1234,		$12(a1,a2.w)
+		addi.b	#$12,		$12(a1,a2.l)
+		addi.w	#$1234,		$1234.w
+		addi.l	#$12345678,	$12345678
+
+		adda.l	#$1234,a1	; note: when a constant must be 
+					; "ADDED" to an address register, the 
+					; instruction is not addi, but adda, 
+					; and cannot be .b
+
+***************************************************************** X N Z V C ***
+ADDQ     Addition of 3-bit #Immediate     #<1-8>,<ea>   BWL       * * * * *
+
+	It means ADD Quick, that is fast addition of a number from 1 to 8, 
+	which works exactly like ADDI, therefore it is better to always use 
+	ADDQ instead of ADDI for the sum of numbers from 1 to 8, since there 
+	is this dedicated instruction . Flags behave like ADD:
+	FLAG: Carry and eXtend = 1 if a carryover occurs, otherwise = 0
+	Negative = 1 if the result is negative, Negative = 0 if it is positive.
+	oVerflow = 1 if the result exceeds the .b, .w or .l size of the ADD
+	Zero = 1 if the result is Zero
+
+	Example:
+
+	#<1-8>,<ea>
+		addq.w	#1,d1
+		addq.w	#1,a1	; NOTE: you can not addq.b on Ax registers
+		addq.w	#1,(a1)
+		addq.l	#1,(a1)+
+		addq.l	#1,-(a1)
+		addq.w	#1,$1234(a1)
+		addq.b	#1,$12(a1,d2.w)
+		addq.w	#1,$12(a1,d2.l)
+		addq.w	#1,$12(a1,a2.w)
+		addq.l	#1,$12(a1,a2.l)
+		addq.w	#1,$1234.w
+		addq.l	#1,$12345678
+
+***************************************************************** X N Z V C ***
+ADDX     ADD with eXtend flag               Dy,Dx      BWL        * * * * *
+                                         -(Ay),-(Ax)
+
+	This addition is used to make binary sums in multiple precision, 
+	64-bit to be clear. It differs from ADD in that FLAG X is added to the 
+	result of the operation.
+	Flags are affected like this:
+	FLAG: Carry and eXtend = 1 if a carryover occurs, otherwise = 0
+	Zero = 1 if the result is Zero, otherwise it remains UNCHANGED
+
+	Example:
+
+	Dy,Dx
+		addx.b	d0,d1		; addx.b, addx.w, addx.l possible
+
+	-(Ay),-(Ax)
+		addx.b	-(a0),-(a1)	; addx.b, addx.w, addx.l possible
+
+	Let's take an example of a 64-bit sum: we want to add the 64-bit 
+	hexadecimal value $002e305a9cde0920 to the value $00001437a9204883.
+	We can do so:
+
+	move.l	#$002e305a,d0	;\ first value in d0 and d1
+	move.l	#$9cde0920,d1	;/
+	move.l	#$00001437,d2	;\ second value in d2 and d3
+	move.l	#$a9204883,d3	;/
+	add.l	d1,d3		; sum of the low longs of the 2 64-bit 
+				; numbers, now the possible carry is in the X 
+				; flag
+	addx.l	d0,d2		; Sum of the high longs, with the addition of 
+				; the X flag, which is the possible carryover 
+				; of the sum of the low longs.
+
+	We have the 64-bit sum in the regs. d3 (low 32 bits) and d2 (high bits).
+	If the sum exceeds the possible 64 bits (but what do you want to add?) 
+	then the Carry FLAG will be set.
+
+***************************************************************** X N Z V C ***
+AND      AND logic between bits            Dn,<ea>     BWL        - * * 0 0
+					   <ea>,Dn
+
+	The logical AND operation is performed between the single bits of the 
+	source and those of the destination, and the result is stored in the 
+	destination. Here is a bitwise AND table:
+
+	0 AND 0 = 0
+	0 AND 1 = 0
+	1 AND 0 = 0
+	1 AND 1 = 1
+
+	Therefore the main use is to "mask" some bits, for example an AND.B 
+	#%00001111,d0 has the effect of clearing the 4 high bits, and leaving 
+	the 4 low bits unchanged, so we can say that we have "selected" only 
+	the low 4 bits of the value in d0.
+	FLAG: eXtend not modified, oVerflow and Carry always 0
+	Negative and Zero set or reset depending on the outcome of the AND
+
+	Example:
+
+	Dn,<ea>
+		and.w	d0,d1		; it is not possible to do an AND 
+		and.b	d0,(a1)		; using a direct address register, for 
+		and.w	d0,(a1)+	; example "and.w a0,d0" does not exist.
+		and.l	d0,-(a1)
+		and.w	d0,$1234(a1)
+		and.b	d0,$12(a1,d2.w)
+		and.b	d0,$12(a1,d2.l)
+		and.w	d0,$12(a1,a2.w)
+		and.l	d0,$12(a1,a2.l)
+		and.w	d0,$1234.w
+		and.b	d0,$12345678
+
+	<ea>,Dn
+		and.b	d1,d0		; as above, "and.w d0,a0" does not exist
+		and.w	(a1),d0
+		and.b	(a1)+,d0
+		and.w	-(a1),d0
+		and.b	$1234(a1),d0
+		and.l	$12(a1,d2.w),d0
+		and.b	$12(a1,d2.l),d0
+		and.w	$12(a1,a2.w),d0
+		and.b	$12(a1,a2.l),d0
+		and.b	$1234.w,d0
+		and.l	$12345678,d0
+		and.l	label(pc),d0
+		and.b	label(pc,d2.w),d0
+		and.w	label(pc,d2.l),d0
+		and.b	label(pc,a2.w),d0
+		and.l	label(pc,a2.l),d0
+
+***************************************************************** X N Z V C ***
+ANDI     Bitwise AND with Immediate     #<data>,<ea>   BWL        - * * 0 0
+
+	Like the AND statement, but specific to #Immediate values.
+	FLAG: eXtend not modified, oVerflow and Carry always 0
+	Negative and Zero set or reset depending on the outcome of the AND
+
+	Example:
+
+	#<data>,<ea>
+		andi.b	#$12,		d1	; the destinations have been
+		andi.l	#$12345678,	(a1)	; spaced for greater readability
+		andi.b	#$12,		(a1)+
+		andi.w	#$1234,		-(a1)
+		andi.l	#$12345678,	$1234(a1)
+		andi.w	#$1234,		$12(a1,d2.w)
+		andi.b	#$12,		$12(a1,d2.l)
+		andi.w	#$1234,		$12(a1,a2.w)
+		andi.l	#$12345678,	$12(a1,a2.l)
+		andi.l	#$12345678,	$1234.w
+		andi.b	#$12,		$12345678
+
+		andi.b	#$12,ccr
+		andi.w	#$1234,sr	; *** PRIVILEGED INSTRUCTION ***
+
+***************************************************************** X N Z V C ***
+ASL      Arithmetic Shift Left            #<1-8>,Dy    BWL        * * * * *
+                                            Dx,Dy
+                                            <ea>
+
+	Arithmetic shift to the left. By shift we mean a "scrolling" of bits, 
+	in this case towards the left, eg: %0001 shifted by 2: %0100
+	that is, the bits that make up the number are scrolled, "shifted" to 
+	the left; in the case of the ASL the low bits are "filled" with zeros, 
+	while the "outgoing" bits on the left side are copied into the Carry 
+	and Extend FLAGs. With #immediate addressing the maximum shift is #8, 
+	while in the Dx,Dy format the first 6 bits of the Dx register are 
+	used, therefore the shift can go from 0 to 63 ($3f)
+	The FLAGs are all modified according to the operation; in the Carry 
+	and in the eXtend the high bit "released" is copied
+
+			value that shifts
+			   to the left
+			 ------------
+	   Flag X/C <-- |<- <- <- <- | <--- 0 - A zero enters from the right
+ 			 ------------
+
+	; Addressing like ASR,LSL,LSR,ROL,ROR,ROXL,ROXR
+
+	Example:
+
+	#<1-8>,Dy
+		asl.b	#2,d1	; .b, .w and .l possible, maximum asl.x #8,Dy
+
+	Dx,Dy
+		asl.b	d0,d1	; .b, .w and .l possible, the maximum shift in 
+				; this case is 63 (the first 6 bits of the 
+				; data register are used)
+	<ea>
+		asl.w	(a1)		; note: the "asl <ea>" can only be .w,
+		asl.w	(a1)+		; it is not possible to use .b or .l
+		asl.w	-(a1)		; note2: you can also write the form
+		asl.w	$1234(a1)	; "asl.w #1,(a1)", "asl.w #1,xxx", but
+		asl.w	$12(a1,d2.w)	; usually just write "asl.w <ea>" for
+		asl.w	$12(a1,d2.l)	; 1-bit shifts.
+		asl.w	$12(a1,a2.w)
+		asl.w	$12(a1,a2.l)
+		asl.w	$1234.w
+		asl.w	$12345678
+
+***************************************************************** X N Z V C ***
+ASR      Arithmetic Shift Right           #<1-8>,Dy    BWL        * * * * *
+                                            Dx,Dy
+                                            <ea>
+
+	Arithmetic shift to the right. By shift we mean a "scrolling" of bits, 
+	in this case towards the right, eg: %0100 shifted by 2: %0001
+	that is, the bits that make up the number are scrolled, "shifted" to 
+	the right. In each shift, the low bit of the destination register is 
+	copied to the Carry and eXtend bits, while the highest bit is left 
+	UNCHANGED. (unlike LSR, ie the LOGIC SHIFT to the right, where the 
+	highest bit is set to zero).
+	Therefore, the ASR, unlike the LSR, keeps the sign bit.
+	With #immediate addressing the maximum shift is # 8, i.e. 3 bits, 
+	while in the Dx,Dy format the first 6 bits of the Dx register are 
+	used, therefore the shift can go from 0 to 63 ($3f)
+	The FLAGs are all modified according to the operation; the low bit 
+	"released" is copied to the Carry and to the eXtend
+
+			value that shifts
+			  to the right
+			 ------------
+		    /-->|-> -> -> ->| ---> Flag X/C
+ 		    |    ------------
+		    |_____|
+	The high bit is replicated to keep the sign
+
+	; Addressing like ASL,LSL,LSR,ROL,ROR,ROXL,ROXR
+
+	Example:
+
+	#<1-8>,Dy
+		asr.b	#2,d1	; .b, .w and .l possible, maximum asr.x #8,Dy
+
+	Dx,Dy
+		asr.b	d0,d1	; .b, .w and .l possible, the maximum shift in 
+				; this case is 63 (the first 6 bits of the 
+				; data register are used)
+
+	<ea>
+		asr.w	(a1)	; only .w possible. This is the same as 
+				; asr.w #1,<ea>
+		asr.w	(a1)+	; read the note to the ASL instruction
+		asr.w	-(a1)
+		asr.w	$1234(a1)
+		asr.w	$12(a1,d2.w)
+		asr.w	$12(a1,d2.l)
+		asr.w	$12(a1,a2.w)
+		asr.w	$12(a1,a2.l)
+		asr.w	$1234.w
+		asr.w	$12345678
+
+***************************************************************** X N Z V C ***
+Bcc      Conditional Branch            Bcc.S <label>   BW-        - - - - -
+                                       Bcc.W <label>
+
+	Test of condition codes and branch. By cc we mean one of these: 
+	hi,ls,cc,cs,ne,eq,vc,vs,pl,mi,ge,lt,gt,le,ra.
+	They can be .s (i.e. .b) or .w only, not .l.
+	FLAG: no flags are changed
+	They can be used after a CMP, a TST, or even after an ADD etc.
+	In practice this instruction is used to make jumps to certain labels 
+	if and only if the flags are in a certain position. The BRA is unique, 
+	which means Branch Always, that is, ALWAYS JUMP, which jumps every 
+	time. In other cases it depends on the Condition Codes. Meanwhile, 
+	let's see the possible Bccs:
+
+	Eg:	(Consider the situation after a CMP.x OP1,OP2)
+	
+		bhi.s	label	; > (If OP2 is greater than OP1) (OP=Operand)
+				; (HIgher ) - OP2 > OP1, unsigned
+				; * If Carry = 0 and Z = 0
+
+		bgt.w	label	; > (If OP2 is greater than OP1) with sign
+				; (Greather Than) OP2 > OP1, with sign
+				; * (N and V or not N and not V) and not Z
+
+		bcc.s	label	; >= (also called BHS) - * If Carry = 0
+				; (Carry bit Clear) - OP2 >= OP1, unsigned
+
+		bge.s	label	; >= (If OP2 is greater than or equal to OP1)
+				; (Greather than or Equal) OP2>=OP1, with sign
+				; * If N=1 and V=1, or N=0 and V=0
+
+		beq.s	label	; = (If Z = 1), (zero or equal operands)
+				; (Equal) OP2 = OP1, for number with or 
+				; without sign
+
+		bne.w	label	; >< (If Z = 0), (If OP1 is different than OP2)
+				; (Not Equal), for signed or unsigned numbers
+
+		bls.w	label	; <= (If OP2 is less or equal to OP1)
+				; for unsigned numbers (Lower or Same)
+				; * If Carry = 1 or Z = 1
+
+		ble.w	label	; < (If OP2 is less than OP1) for numbers 
+				; with sign
+				; * N and not V or not N and V or Z
+
+		bcs.w	label	; < (also called BLO) - * If Carry = 1
+				; (Carry bit Set) - OP2 < OP1, unsigned
+
+		blt.w	label	; < (If OP2 is less than OP1)
+				; (Less Than), for signed numbers
+
+		bpl.w	label	; + (If Negative = 0), that is, if the result 
+				; is positive (PLus)
+
+		bmi.s	label	; - (If Negative = 1), that is, if the result 
+				; is negative (Minus)
+
+		bvc.w	label	; If the overflow bit is V=0 (for numbers 
+				; with sign) - NO OVERFLOW (V-bit Clear)
+
+		bvs.s	label	; If the overflow bit is V=1 (for numbers 
+				; with sign) - OVERFLOW (V-bit Set)
+
+		bra.s	label	; always, salta sempre! Same as JMP
+
+
+	The uses of these conditional jumps are infinite, for example, with a:
+
+		TST.B	d0
+		BEQ.S	Label
+
+	It happens that IF d0 = 0, then the Z (zero) flag is set, so beq (Z = 
+	1, zero equal operands) jumps to Label. Or:
+
+		CMP.W	d0,d1
+		bhi.s	label	; > (If OP2 is greater than OP1)
+
+	In this case if d1 is greater than d0 the BEQ jumps to Label.
+	Note that the CMP compares the destination (d1) with the source, and 
+	not vice versa!
+
+	Let's do some cases with an ADD:
+
+	ADD.W	d0,d1
+	BCS.s	label	; if there is a carry, go to the label (it means that 
+			; we have exceeded the value that the word can contain)
+
+	ADD.L	d3,d4
+	BEQ.s	label	; If the result is zero, jump to the label
+
+	ADD.B	d1,d2
+	BVS.s	Label	; Overflow! the sum of two numbers with the same sign, 
+			; whether positive or negative, is greater than the 
+			; range of 2's complement numbers possible in a byte, 
+			; (-127..+128).
+
+	Now let's see how to use Bccs after CMP.x OP1,OP2
+	
+		beq.s	label	; OP2 =  OP1 - for all numbers
+		bne.w	label	; OP2 >< OP1 - for all numbers
+		bhi.s	label	; OP2 >  OP1 - unsigned
+		bgt.w	label	; OP2 >  OP1 - with SIGN
+		bcc.s	label	; OP2 >= OP1 - unsigned, also called *"BHS"*
+		bge.s	label	; OP2 >= OP1 - with SIGN
+		bls.w	label	; OP2 <= OP1 - unsigned
+		ble.w	label	; OP2 <= OP1 - with SIGN
+		bcs.w	label	; OP2 <  OP1 - unsigned, also called *"BLO"*
+		blt.w	label	; OP2 <  OP1 - with SIGN
+
+	And now how to use them after a TST.x OP1
+
+		beq.s	label	; OP1 =  0 - for all numbers
+		bne.w	label	; OP1 >< 0 - for all numbers
+		bgt.w	label	; OP1 >  0 - with SIGN
+		bpl.s	label	; OP1 >= 0 - with SIGN (or BGE)
+		ble.w	label	; OP1 <= 0 - with SIGN
+		bmi.w	label	; OP1 <  0 - with SIGN (or BLT)
+
+	The latter also apply after an ADD.x or a SUB.x, for example:
+
+		ADD.W	d1,d2
+		beq.s	ResultZero
+		bpl.s	ResultGreaterThanZero
+		bmi.s	ResultLessThanZero
+
+	This saves us doing a TST.w d2 after the ADD.
+
+***************************************************************** X N Z V C ***
+BCHG     Test a Bit and CHanGe             Dn,<ea>     B-L        - - * - -
+                                        #<data>,<ea>
+
+	This operation changes a single specified bit, by "change" we mean 
+	that if it was 0 it sets it to 1, if it was 1 it sets it to 0.
+	To do this, it first tests it, setting the Z flag, after which it 
+	"changes" it with a NOT.
+	FLAG: Only the Z is changed
+	If the destination operand is a data register then the instruction is 
+	always .L, and it is possible to specify a bit from 0 to 31 with the 
+	source operand.
+	If the destination operand is a memory byte, then the instruction is 
+	always .B, and a bit from 0 to 7 can be specified with the source 
+	operand.
+
+	; Addressing like BSET, BCLR; the BTST has a few more (PC)
+
+	Example:
+
+	Dn,<ea>
+		bchg.l	d1,d2		; only .L when operating on a DATA 
+					; register. In this case, you can 
+					; specify a bit between 0 and 31
+					
+		bchg.b	d1,(a1)		; only .B when operating on other
+		bchg.b	d1,(a1)+	; addresses. In this case, you can
+		bchg.b	d1,-(a1)	; specify a bit between 0 and 7
+		bchg.b	d1,$1234(a1)
+		bchg.b	d1,$12(a1,d2.w)
+		bchg.b	d1,$12(a1,d2.l)
+		bchg.b	d1,$12(a1,a2.w)
+		bchg.b	d1,$12(a1,a2.l)
+		bchg.b	d1,$1234.w
+		bchg.b	d1,$12345678
+
+	#<data>,<ea>
+		bchg.l	#1,d2		; only .L when operating on a DATA
+					; register. In this case, you can
+					; specify a bit between 0 and 31
+
+		bchg.b	#1,(a1)		; only .B when operating on other
+		bchg.b	#1,(a1)+	; addresses. In this case it is
+		bchg.b	#1,-(a1)	; possible to specify a bit between 0
+		bchg.b	#1,$1234(a1)	; and 7. Beware, however, that the
+		bchg.b	#1,$12(a1,d2.w)	; ASMONE mistakenly also assembles
+		bchg.b	#1,$12(a1,d2.l)	; values higher than 7, in this case
+		bchg.b	#1,$12(a1,a2.w)	; the bit on which to operate is, for
+		bchg.b	#1,$12(a1,a2.l)	; example, if #13, #13-8 = 5.
+		bchg.b	#1,$1234.w
+		bchg.b	#1,$12345678
+
+	NOTE:
+		unfortunately the ASMONE also assembles the bchg with values 
+		higher than 7, (for example the DevPac would give an error).
+		NEVER GIVE values higher than 7 for bchg.b!
+		However, if any listing has it, the instruction is executed 
+		anyway, and the bit is "calculated" by subtracting 8, or if 
+		the number is greater than 16 by subtracting 2 * 8, 3 * 8 and 
+		so on. Here, for example, is a list of equivalents of bchg.b 
+		#1,xxx, obviously just for information:
+
+		bchg.b	#1,<ea>
+		bchg.b	#1+8,<ea>	; or #9
+		bchg.b	#1+8*2,<ea>	; or #17
+		bchg.b	#1+8*3,<ea>	; or #25
+		bchg.b	#1+8*4,<ea>	; or #33
+		bchg.b	#1+8*5,<ea>	; or #41
+		...
+		bchg.b	#1+8*30,<ea>	; or #241
+		bchg.b	#1+8*31,<ea>	; or #249 (maximum 255)
+
+		This ASMONE (and 68000?) error is present for BCHG, BSET, 
+		BCLR, BTST instructions
+
+***************************************************************** X N Z V C ***
+BCLR     Test a Bit and CLeaR              Dn,<ea>     B-L        - - * - -
+                                        #<data>,<ea>
+
+	This instruction RESETS the specified bit.
+	If the destination operand is a data register then the instruction is 
+	always .L, and it is possible to specify a bit from 0 to 31 with the 
+	source operand.
+	If the destination operand is a memory byte, then the instruction is 
+	always .B, and a bit from 0 to 7 can be specified with the source 
+	operand.
+
+	; Addressing like BCHG, BSET; the BTST has a few more (PC)
+
+	Example:
+
+	Dn,<ea>
+		bclr.l	d1,d2		; only .L when operating on a DATA 
+					; register. In this case, you can 
+					; specify a bit between 0 and 31
+
+		bclr.b	d1,(a1)		; only .B when operating on other
+		bclr.b	d1,(a1)+	; addresses. In this case, you can
+		bclr.b	d1,-(a1)	; specify a bit between 0 and 7
+		bclr.b	d1,$1234(a1)
+		bclr.b	d1,$12(a1,d2.w)
+		bclr.b	d1,$12(a1,d2.l)
+		bclr.b	d1,$12(a1,a2.w)
+		bclr.b	d1,$12(a1,a2.l)
+		bclr.b	d1,$1234.w
+		bclr.b	d1,$12345678
+
+	#<data>,<ea>
+		bclr.l	#1,d2		; only .L when operating on a DATA
+					; register. In this case, you can
+					; specify a bit between 0 and 31
+
+		bclr.b	#1,(a1)		; only .B when operating on other
+		bclr.b	#1,(a1)+	; addresses. In this case, you can
+		bclr.b	#1,-(a1)	; specify a bit between 0 and 7
+		bclr.b	#1,$1234(a1)
+		bclr.b	#1,$12(a1,d2.w)
+		bclr.b	#1,$12(a1,d2.l)
+		bclr.b	#1,$12(a1,a2.w)
+		bclr.b	#1,$12(a1,a2.l)
+		bclr.b	#1,$1234.w
+		bclr.b	#1,$12345678
+
+	NOTE:
+		Unfortunately the ASMONE also assembles the bclr with values 
+		higher than 7, (for example the DevPac would give an error).
+		NEVER GIVE values higher than 7 for bclr.b!
+		See the note to the BCHG for more information
+
+***************************************************************** X N Z V C ***
+BSET     Test a Bit and SET                Dn,<ea>     B-L        - - * - -
+                                        #<data>,<ea>
+
+	This instruction SETS to 1 the specified bit.
+	If the destination operand is a data register then the instruction is 
+	always .L, and it is possible to specify a bit from 0 to 31 with the 
+	source operand.
+	If the destination operand is a memory byte, then the instruction is 
+	always .B, and a bit from 0 to 7 can be specified with the source 
+	operand.
+
+
+	; Addressing like BCHG,BCLR; the BTST has a few more (PC)
+
+	Example:
+
+	Dn,<ea>
+		bset.l	d1,d2		; only .L when operating on a DATA 
+					; register. In this case, you can 
+					; specify a bit between 0 and 31
+
+		bset.b	d1,(a1)		; only .B when operating on other
+		bset.b	d1,(a1)+	; addresses. In this case, you can
+		bset.b	d1,-(a1)	; specify a bit between 0 and 7
+		bset.b	d1,$1234(a1)
+		bset.b	d1,$12(a1,d2.w)
+		bset.b	d1,$12(a1,d2.l)
+		bset.b	d1,$12(a1,a2.w)
+		bset.b	d1,$12(a1,a2.l)
+		bset.b	d1,$1234.w
+		bset.b	d1,$12345678
+
+	#<data>,<ea>
+		bset.l	#1,d2		; only .L when operating on a DATA 
+					; register. In this case, you can 
+					; specify a bit between 0 and 31
+
+		bset.b	#1,(a1)		; only .B when operating on other
+		bset.b	#1,(a1)+	; addresses. In this case, you can
+		bset.b	#1,-(a1)	; specify a bit between 0 and 7
+		bset.b	#1,$1234(a1)
+		bset.b	#1,$12(a1,d2.w)
+		bset.b	#1,$12(a1,d2.l)
+		bset.b	#1,$12(a1,a2.w)
+		bset.b	#1,$12(a1,a2.l)
+		bset.b	#1,$1234.w
+		bset.b	#1,$12345678
+
+	NOTE:
+		Unfortunately the ASMONE also assembles the bset with values 
+		higher than 7, (for example the DevPac would give an error).
+		NEVER GIVE values higher than 7 for bset.b!
+		See the note to the BCHG for more information
+
+***************************************************************** X N Z V C ***
+BTST     Bit TeST                          Dn,<ea>     B-L        - - * - -
+                                        #<data>,<ea>
+
+	This instruction TESTs if the specified bit is ZERO.
+	If the destination operand is a data register then the instruction is 
+	always .L, and it is possible to specify a bit from 0 to 31 with the 
+	source operand.
+	If the destination operand is a memory byte, then the instruction is 
+	always .B, and a bit from 0 to 7 can be specified with the source 
+	operand.
+
+	; Addressing like BCHG, BSET, BCLR, in addition it manages the PC 
+	; register
+
+	Example:
+
+	Dn,<ea>
+		btst.l	d1,d2		; only .L when operating on a DATA 
+					; register. In this case, you can 
+					; specify a bit between 0 and 31
+
+		btst.b	d1,(a1)		; only .B when operating on other
+		btst.b	d1,(a1)+	; addresses. In this case, you can
+		btst.b	d1,-(a1)	; specify a bit between 0 and 7
+		btst.b	d1,$1234(a1)
+		btst.b	d1,$12(a1,d2.w)
+		btst.b	d1,$12(a1,d2.l)
+		btst.b	d1,$12(a1,a2.w)
+		btst.b	d1,$12(a1,a2.l)
+		btst.b	d1,$1234.w
+		btst.b	d1,$12345678
+
+		btst.b	d1,label(pc)		; the BTST can also do the
+		btst.b	d1,label(pc,d2.w)	; addressing relative to the
+		btst.b	d1,label(pc,d2.l)	; PC used as destination!
+		btst.b	d1,label(pc,a2.w)
+		btst.b	d1,label(pc,a2.l)
+
+	#<data>,<ea>
+		btst.l	#1,d2		; only .L when operating on a DATA 
+					; register. In this case, you can 
+					; specify a bit between 0 and 31
+
+		btst.b	#1,(a1)		; only .B when operating on other
+		btst.b	#1,(a1)+	; addresses. In this case, you can
+		btst.b	#1,-(a1)	; specify a bit between 0 and 7
+		btst.b	#1,$1234(a1)
+		btst.b	#1,$12(a1,d2.w)
+		btst.b	#1,$12(a1,d2.l)
+		btst.b	#1,$12(a1,a2.w)
+		btst.b	#1,$12(a1,a2.l)
+		btst.b	#1,$1234.w
+		btst.b	#1,$12345678
+
+		btst.b	#1,label(pc)		; the BTST can also do the
+		btst.b	#1,label(pc,d2.w)	; addressing relative to the
+		btst.b	#1,label(pc,d2.l)	; PC used as destination!
+		btst.b	#1,label(pc,a2.w)
+		btst.b	#1,label(pc,a2.l)
+
+	NOTE:
+		Unfortunately the ASMONE also assembles the btst with values 
+		higher than 7, (for example the DevPac would give an error).
+		NEVER GIVE values higher than 7 for btst.b!
+		See the note to the BCHG for more information
+
+***************************************************************** X N Z V C ***
+BSR      Branch to SubRoutine          BSR.S <label>   BW-        - - - - -
+                                       BSR.W <label>
+
+	This instruction jumps to the label as a JSR and returns when it finds 
+	the end of the sub-routine (the rts).
+	FLAG: no flags are changed
+
+		bsr.s	label	; .s (or .b) or .w is possible (NOT .L!)
+
+***************************************************************** X N Z V C ***
+CHK      CHecK Dn Against Bounds           <ea>,Dn     -W-        - * U U U
+
+	This instruction checks whether the 16-bit value contained in the 
+	destination data register is less than zero, or greater than a given 
+	source operand. If the value is within the limits, you go to the next 
+	instruction, otherwise an Exception is thrown, however this 
+	instruction is NEVER used and it just sends everything to GURU 
+	MEDITATION ... it's not needed, you don't use it.
+
+***************************************************************** X N Z V C ***
+CLR      CLeaR (reset)                      <ea>       BWL        - 0 1 0 0
+
+	This instruction clears the target, such as a move.x #0,<ea>
+	FLAG: eXtend not modified, Zero = 1, the others reset
+
+	Example:
+
+	<ea>
+		clr.b	d1	; .b, .w and .l is possible
+		clr.w	(a1)
+		clr.b	(a1)+
+		clr.w	-(a1)
+		clr.l	$1234(a1)
+		clr.w	$12(a1,d2.w)
+		clr.b	$12(a1,d2.l)
+		clr.w	$12(a1,a2.w)
+		clr.b	$12(a1,a2.l)
+		clr.w	$1234.w
+		clr.l	$12345678
+
+***************************************************************** X N Z V C ***
+CMP      CoMPare (confronta)               <ea>,Dn     BWL        - * * * *
+
+	Compare, by subtracting, the source with a data register.
+	Pay attention to the fact that in cases were you want to check which 
+	of the two operands is greater with BMI, BPL, BHI etc., The 
+	destination operand, OP2, is compared with the source (OP1).
+	You can see this fact better at the Bcc instruction
+	FLAG: eXtend not modified, the others according to the comparison.
+
+	Ex:
+
+	<ea>,Dn
+		cmp.b	d1,d0
+		cmp.w	a1,d0		; note: cmp.b with Ax is not possible
+		cmp.w	(a1),d0
+		cmp.b	(a1)+,d0
+		cmp.w	-(a1),d0
+		cmp.l	$1234(a1),d0
+		cmp.w	$12(a1,d2.w),d0
+		cmp.l	$12(a1,d2.l),d0
+		cmp.w	$12(a1,a2.w),d0
+		cmp.l	$12(a1,a2.l),d0
+		cmp.w	$1234.w,d0
+		cmp.b	$12345678,d0
+		cmp.w	label(pc),d0
+		cmp.l	label(pc,d2.w),d0
+		cmp.w	label(pc,d2.l),d0
+		cmp.b	label(pc,a2.w),d0
+		cmp.w	label(pc,a2.l),d0
+
+***************************************************************** X N Z V C ***
+CMPA     CoMPare Address                   <ea>,An     -WL        - * * * *
+
+	This instruction works like the CMP, but is dedicated to comparisons 
+	with address registers, where the CMP is not possible.
+	The addresses must be considered as unsigned numbers, therefore it is 
+	necessary to use the Bccs for these numbers:
+
+	beq.s	label	; OP2 =  OP1
+	bne.w	label	; OP2 >< OP1
+	bhi.s	label	; OP2 >  OP1
+	bcc.s	label	; OP2 >= OP1 - also called *"BHS"*
+	bls.w	label	; OP2 <= OP1
+	bcs.w	label	; OP2 <  OP1 - also called *"BLO"*
+
+	FLAG: eXtend not modified, the others according to the comparison.
+
+	Advise: ALWAYS use the .L extension
+
+	Example:
+
+	<ea>,An
+		cmpa.l	d1,a0		; note: cmpa.b is not possible!!
+		cmpa.l	a1,a0
+		cmpa.l	(a1),a0
+		cmpa.l	(a1)+,a0
+		cmpa.l	-(a1),a0
+		cmpa.l	$1234(a1),a0
+		cmpa.l	$12(a1,d2.w),a0
+		cmpa.l	$12(a1,d2.l),a0
+		cmpa.l	$12(a1,a2.w),a0
+		cmpa.l	$12(a1,a2.l),a0
+		cmpa.l	$1234.w,a0
+		cmpa.l	$12345678,a0
+		cmpa.l	label(pc),a0
+		cmpa.l	label(pc,d2.w),a0
+		cmpa.l	label(pc,d2.l),a0
+		cmpa.l	label(pc,a2.w),a0
+		cmpa.l	label(pc,a2.l),a0
+
+		cmpa.l	#$1234,a1	; note: to compare an #immediate with
+					; an Ax address register, use the
+					; cmpa instruction, not cmpi.
+
+	Beware of the fact that a CMPA.W xxxx,Ax compares 32 bits, and not 16, 
+	as it might seem for the .w we use.
+	The 16-bit source operand is extended by sign to 32 bits, i.e. the 
+	value of the sign bit, 15, will be copied to bits 16 to 31.
+	For instance:
+
+		lea	$1234,a0
+		CMPA.W	#$1234,a0	; cmp $00001234 , a0
+		beq.s	JumpLabel
+
+	In this case the number is positive, in 2's complement, so the high 
+	bit is zero and all the others (from 16 to 31) are reset, and we jump 
+	to JumpLabel, being equal.
+	In this case, however:
+
+		lea	$9200,a0
+		CMPA.W	#$9200,a0	; cmp $FFFF9200 , a0, perchè $9200 in
+					; because $9200 in SIGNED .w is
+					; negative (-28672)
+		beq.s	JumpLabel
+
+	In this case, $9200 is extended to longword, and being negative in 
+	signed notation, the high bits are padded with 1, so you compare 
+	between $FFFF9200 and $9200, and don't jump to JumpLabel. Using 
+	instead a "CMPA.L #$9200,a0" we would have achieved the jump.
+	As you can see, for numbers below $7fff there are no differences 
+	between CMPA.L and CMPA.W, while there are for higher numbers. 
+	ATTENTION!
+
+***************************************************************** X N Z V C ***
+CMPI     CoMPare Immediate              #<data>,<ea>   BWL        - * * * *
+
+	This instruction is like the CMP, but is dedicated to comparing an 
+	#immediate (a constant number) with the destination.
+	This is done by subtracting the #Immediate operand from the 
+	destination, the result of this operation modifies the flags 
+	accordingly.
+	FLAG: eXtend not modified, the others according to the comparison.
+
+	Example:
+
+	<data>,<ea>
+		cmpi.w	#$1234,		d1	; destinations have been
+		cmpi.l	#$12345678,	(a1)	; spaced apart for greater
+		cmpi.b	#$12,		(a1)+	; readability
+		cmpi.w	#$1234,		-(a1)
+		cmpi.l	#$12345678,	$1234(a1)
+		cmpi.b	#$12,		$12(a1,d2.w)
+		cmpi.w	#$1234,		$12(a1,d2.l)
+		cmpi.b	#$12,		$12(a1,a2.w)
+		cmpi.l	#$12345678,	$12(a1,a2.l)
+		cmpi.w	#$1234,		$1234.w
+		cmpi.b	#$12,		$12345678
+
+		cmpa.w	#$1234,a1	; note: to compare an #immediate with
+					; an Ax address register, use the
+					; CMPA instruction, not CMPI.
+
+***************************************************************** X N Z V C ***
+CMPM     CoMPare Memory                  (Ay)+,(Ax)+   BWL        - * * * *
+
+	This instruction is used to compare memory locations.
+	FLAG: the eXtend is not modified, the others modified according to the 
+	operation.
+
+	Example:
+
+	(Ay)+,(Ax)+
+		cmpm.w	(a0)+,(a1)+	; cmpm.b, cmpm.w and cmpm.l is possible
+
+	It can be used to replace a routine like this:
+
+	move.w	(a0)+,d0
+	cmp.w	(a1)+,d0
+
+***************************************************************** X N Z V C ***
+DBcc     Looping Instruction          DBcc Dn,<label>  -W-        - - - - -
+
+	This instruction basically serves to create LOOPs, ie cycles, in which 
+	the number of cycles is regulated by a DATA register which is 
+	decreased for each cycle.
+	the instruction allows the use of all cc as Bcc, but is almost always 
+	used in the form DBRA (also called DBF), which causes the loop to run 
+	every time without checking the condition codes.
+	To make complicated loops you can still use all the cc's.
+	Beware of the fact that, unlike Bcc, the DBcc jumps to the label only 
+	if the condition is FALSE!
+	FLAG: No flags are changed
+
+
+	Example:	(See Bcc for the description of the cc)
+
+	DBcc Dn,<label>
+		dbra	d0,label	; also called DBF, tells you to jump
+					; to label each time, until counter d0
+					; is exhausted
+
+		dbhi	d0,label ; > for unsigned numbers
+		dbgt	d0,label ; > for numbers with sign
+		dbcc	d0,label ; >= for num. unsigned - also called DBHS
+		dbge	d0,label ; >= for numbers with sign
+		dbeq	d0,label ; = for all numbers
+		dbne	d0,label ; >< for all numbers
+		dbls	d0,label ; <= for num. unsigned
+		dble	d0,label ; <= for numbers with sign
+		dbcs	d0,label ; < for num. unsigned - also called DBLO
+		dblt	d0,label ; < for numbers with sign
+		dbpl	d0,label ; If Negative = 0 (PLus)
+		dbmi	d0,label ; If Negative = 1, (Minus) num. with sign
+		dbvc	d0,label ; V=0, no OVERFLOW
+		dbvs	d0,label ; V=1 OVERFLOW
+
+***************************************************************** X N Z V C ***
+DIVS     DIVide Signed                     <ea>,Dn     -W-        - * * * 0
+
+	Binary division with sign. One of the slowest instructions.
+	The Destination operand, the 32-bit dividend, is divided by the 16-bit 
+	source (divider), just like the DIVU.
+	is a division of integers, since a comma is not available. For 
+	example, if you do 5:2, the result is 2, the remainder is 1.
+	The result, placed in the destination data register, is a longword 
+	broken into 2 words, containing the quotient and the remainder.
+	The quotient is stored in the lower 16 bits (0-15)
+	In the higher 16 bits (16-31) the remainder of the division performed, 
+	to which the sign of the dividend is attributed.
+	The difference with DIVU lies only in the fact that binary arithmetic 
+	is respected with SIGN (2's complement)
+	In the case of division by Zero, the computer goes to GURU, in fact 
+	the vector exception is executed at location $14
+	FLAG: The eXtend is not modified, the Carry is reset, while the others 
+	are modified according to the quotient.
+	Note that if the result is too large to be contained in the low word 
+	of the register (if the quotient exceeds the limit +32767 -32768 of 
+	the signed numbers), the oVerflow flag is set, therefore it is 
+	necessary to check it after the division to be sure that the result is 
+	correct, since if it is not correct the operands are not modified.
+
+	Example:
+
+	<ea>,Dn
+		divs.w	d1,d0		; only .w possible
+		divs.w	(a1),d0
+		divs.w	(a1)+,d0
+		divs.w	-(a1),d0
+		divs.w	$1234(a1),d0
+		divs.w	$12(a1,d2.w),d0
+		divs.w	$12(a1,d2.l),d0
+		divs.w	$12(a1,a2.w),d0
+		divs.w	$12(a1,a2.l),d0
+		divs.w	$1234.w,d0
+		divs.w	$12345678,d0
+		divs.w	label(pc),d0
+		divs.w	label(pc,d2.w),d0
+		divs.w	label(pc,d2.l),d0
+		divs.w	label(pc,a2.w),d0
+		divs.w	label(pc,a2.l),d0
+		divs.w	#$1234,d0
+
+	note: it is not possible to use an address register An as an operand
+
+	Let's try to do a division:
+
+	moveq	#-33,d0	; 32-bit SIGNED number to divide
+	moveq	#5,d1	; divider
+	divs	d1,d0	; we divide d0 into d1 parts, or 33/5
+
+	the result, in d0, is $FFFDFFFA, where $FFFD = -3, and $FFFA = -6, in 
+	fact -33 divided by 5 is -6, remainder -3. The remainder is negative 
+	because the sign of the remainder is always that of the dividend.
+
+***************************************************************** X N Z V C ***
+DIVU     DIVide Unsigned                   <ea>,Dn     -W-        - * * * 0
+
+	Unsigned binary division. It is one of the most powerful, but also one 
+	of the slowest instructions. Performs a binary division between a 
+	32-bit destination operand (dividend) and a 16-bit source operand 
+	(divider). The division is done between unsigned numbers, and is a 
+	division of integers, since no comma is available. For example, if you 
+	do 5:2, the result is 2, the remainder is 1.
+	The result of the division, with quotient and remainder, is stored in 
+	the destination data register.
+	The quotient is stored in the lower 16 bits (0-15)
+	In the higher 16 bits (16-31) the remainder of the division carried out
+	In the case of division by Zero, the computer goes to GURU, in fact 
+	the vector exception is executed at location $14
+	FLAG: The eXtend is not modified, the Carry is reset, while the others 
+	are modified according to the quotient.
+	Note that if the result is too large to be contained in the low word 
+	of the register, the oVerflow flag is set, therefore it is necessary 
+	to check it after the division to be sure that the result is correct. 
+	If it is not correct, the operands are not modified and only the 
+	oVerflow flag is set.
+
+	Example:
+
+	<ea>,Dn
+		divu.w	d1,d0		; only .w possible
+		divu.w	(a1),d0
+		divu.w	(a1)+,d0
+		divu.w	-(a1),d0
+		divu.w	$1234(a1),d0
+		divu.w	$12(a1,d2.w),d0
+		divu.w	$12(a1,d2.l),d0
+		divu.w	$12(a1,a2.w),d0
+		divu.w	$12(a1,a2.l),d0
+		divu.w	$1234.w,d0
+		divu.w	$12345678,d0
+		divu.w	label(pc),d0
+		divu.w	label(pc,d2.w),d0
+		divu.w	label(pc,d2.l),d0
+		divu.w	label(pc,a2.w),d0
+		divu.w	label(pc,a2.l),d0
+		divu.w	#$1234,d0
+
+	note: it is not possible to use an address register An as an operand
+
+	Let's try to do a division:
+
+	moveq	#33,d0	; 32-bit number to divide
+	moveq	#5,d1	; divider
+	divu.w	d1,d0	; we divide d0 into d1 parts, or 33/5
+
+	the result, in d0, is $00030006, in fact 33 divided by 5 is 6, 
+	remainder 3.
+
+***************************************************************** X N Z V C ***
+EOR      Exclusive OR                      Dn,<ea>     BWL        - * * 0 0
+
+	This instruction performs the bitwise exclusive OR on the target.
+	In practice, the result bit is 1 only if the operands are different.
+	Here is the results table, which highlights the difference with OR:
+
+	0 EOR 0 = 0
+	0 EOR 1 = 1
+	1 EOR 0 = 1
+	1 EOR 1 = 0	; This is the difference with OR! in fact 1 OR 1 = 1.
+
+	Some examples:
+
+	0000000001 EOR 1101011101 = 1101010000 - 1 bit cleared
+	1000000000 EOR 0010011000 = 1010011000 - 1 bit set
+
+	So it sets the bit only if one of the bits are 1, not when they are 
+	both at 1, as the OR does. (translator note: you can use the EOR to 
+	switch bits in the target.)
+	
+	FLAG: eXtend not modified, oVerflow and Carry reset, Negative and Zero 
+	modified according to the outcome of the operation
+
+	Example:
+
+	Dn,<ea>
+		eor.b	d1,d2		; .b, .w, .l is possible
+		eor.w	d1,(a1)
+		eor.b	d1,(a1)+
+		eor.w	d1,-(a1)
+		eor.l	d1,$1234(a1)
+		eor.w	d1,$12(a1,d2.w)
+		eor.l	d1,$12(a1,d2.l)
+		eor.w	d1,$12(a1,a2.w)
+		eor.b	d1,$12(a1,a2.l)
+		eor.l	d1,$1234.w
+		eor.w	d1,$12345678
+
+***************************************************************** X N Z V C ***
+EORI     Exclusive OR Immediate         #<data>,<ea>   BWL        - * * 0 0
+
+
+	Like EOR, but specific to #Immediate as a source.
+	FLAG: eXtend not modified, oVerflow and Carry reset, Negative and Zero 
+	modified according to the outcome of the operation
+
+	Example:
+
+	#<data>,<ea>
+		eori.w	#$1234,		d1	; destinations have been
+		eori.b	#$12,		(a1)	; spaced apart for greater
+		eori.w	#$1234,		(a1)+	; readability
+		eori.b	#$12,		-(a1)
+		eori.l	#$12345678,	$1234(a1)
+		eori.w	#$1234,		$12(a1,d2.w)
+		eori.b	#$12,		$12(a1,d2.l)
+		eori.l	#$12345678,	$12(a1,a2.w)
+		eori.b	#$12,		$12(a1,a2.l)
+		eori.w	#$1234,		$1234.w
+		eori.l	#$12345678,	$12345678
+
+		eori.b	#$12,ccr
+		eori.w	#$1234,sr	; *** PRIVILEGED INSTRUCTION ***
+
+***************************************************************** X N Z V C ***
+EXG      Exchange any two registers         Rx,Ry      --L        - - - - -
+
+	Exchange the contents of 2 registers, both addresses and data.
+	FLAG: none are changed
+
+	Example:
+
+	Rx,Ry
+		exg	d0,d1
+		exg	d0,a1
+		exg	a0,a1
+
+***************************************************************** X N Z V C ***
+EXT      Sign EXTend                         Dn        -WL        - * * 0 0
+
+	This statement "EXTENDS" a SIGNED number contained in a data register. 
+	Used for negative numbers in particular, as it does nothing but "fill" 
+	bits 8 to 15 (if EXT.W) or bits 16 to 31 (if EXT.L) by "replicating" 
+	the sign bit ( 7 if EXT.W, or 15 if EXT.L). EXT.W "transforms" from .b 
+	to .w, EXT.L from .w to .l
+	By setting all the bits as the sign bit, the same number is obtained 
+	(especially if negative) also in .w or .l format, starting from a .b. 
+	Let's take an example: d0=$000000FB. We know that $FB is -5 if we are 
+	in the signed byte field, but in the .w or .l field it is simply $ FB 
+	= 251 positive. With an EXT.W d0 we get that d0 = $0000FFFB, so $FFFB 
+	is -5 in the .w field with sign.
+	with an EXT.L we can now get $FFFFFFFB, which is -5 in the signed .l 
+	field!
+
+	Example:
+
+	Dn
+		ext.w	d0	; transforms from .b to .w
+		ext.l	d0	; transforms from .w to .l
+
+To extend a byte to longword, you must first do an ext.w, then an ext.l. eg:
+
+	move.b	#$80,d0		; d0.b = -128
+	ext.w	d0		; d0.w = $ff80  (-128.w)
+	ext.l	d0		; d0.l = $ffffff80  (-128.l)
+
+***************************************************************** X N Z V C ***
+JMP      JuMP to Effective Address          <ea>                  - - - - -
+
+	Skip to the destination routine, similar to the BRA.
+	FLAG: None are changed.
+
+	Example:
+
+	<ea>
+		jmp	(a1)
+		jmp	$1234(a1)
+		jmp	$12(a1,d2.w)
+		jmp	$12(a1,d2.l)
+		jmp	$12(a1,a2.w)
+		jmp	$12(a1,a2.l)
+		jmp	$1234.w
+		jmp	$12345678
+		jmp	label(pc)
+		jmp	label(pc,d2.w)
+		jmp	label(pc,d2.l)
+		jmp	label(pc,a2.w)
+		jmp	label(pc,a2.l)
+
+***************************************************************** X N Z V C ***
+JSR      Jump to SubRoutine                 <ea>                  - - - - -
+
+	Jump to the target subroutine, and return once that subroutine is finished (RTS found). Instruction similar to the BSR
+	FLAG: No flags are changed
+
+	Example:
+
+	<ea>
+		jsr	(a1)
+		jsr	$1234(a1)
+		jsr	$12(a1,d2.w)
+		jsr	$12(a1,d2.l)
+		jsr	$12(a1,a2.w)
+		jsr	$12(a1,a2.l)
+		jsr	$1234.w
+		jsr	$12345678
+		jsr	aa17(pc)
+		jsr	label(pc,d2.w)
+		jsr	label(pc,d2.l)
+		jsr	label(pc,a2.w)
+		jsr	label(pc,a2.l)
+
+***************************************************************** X N Z V C ***
+LEA      Load Effective Address            <ea>,An     --L        - - - - -
+
+	Load an address into an An address register.
+	For example, after a "LEA $10000,a0", A0 = $10000. In this case the 
+	instruction works like a "MOVE.L #$10000,a0", but it is faster.
+	ATTENTION: the LEA command is different from the MOVEA!! Indeed it can 
+	be confusing when we have a "LEA $12(a0),a1", eg: the address 
+	contained in a0 plus the offset, that is $12, goes into a1, and not 
+	the content of that address, as would have happened with indirect 
+	addressing. For example, writing "LEA $12(a0),a0" is equivalent to an 
+	"ADDA.W #$12,a0".
+	FLAG: none are changed
+
+	Example:
+
+	<ea>,An
+		lea	(a1),a0		; note: in this case it copies the
+					; value of a1 into a0 as a MOVE.L
+					: a1,a0!!!
+					; not to be confused with the move.l
+					; (a1),a0 which is instead an indirect
+					; address
+
+		lea	$1234(a1),a0	; In this case, the address contained
+					; in a0 + $1234 goes to a0, do not
+					; confuse it with indirect addressing!
+					; it is a LEA and not a MOVE!!!!!!!!
+		lea	$12(a1,d2.w),a0
+		lea	$12(a1,d2.l),a0
+		lea	$12(a1,a2.w),a0
+		lea	$12(a1,a2.l),a0
+		lea	$1234.w,a0
+		lea	$12345678,a0
+		lea	label(pc),a0
+		lea	label(pc,d2.w),a0
+		lea	label(pc,d2.l),a0
+		lea	label(pc,a2.w),a0
+		lea	label(pc,a2.l),a0
+
+***************************************************************** X N Z V C ***
+LSL      Logical Shift Left                 Dx,Dy      BWL        * * * 0 *
+                                          #<1-8>,Dy
+                                            <ea>
+
+	Logical Shift to the Left. By shift we mean a "scrolling" of bits, in 
+	this case towards the left, eg: %0001 shifted by 2: %0100
+	that is, the bits that make up the number are scrolled, "shifted" to 
+	the left; in the case of LSL the low bits are "filled" with zeros, 
+	while the "outgoing" bits on the left side are copied into the Carry 
+	and Extend FLAGs. it is practically the same as ASL, the difference 
+	between LOGIC shift and ARITHMETIC shift can be seen between ASR and 
+	LSR, not between ASL and LSL.
+	FLAG: the oVerflow is reset, the eXtend and the Carry contain the high 
+	bit "out", Negative and Zero modified according to the operation.
+	
+			value that shifts
+			to the left
+			 ------------
+	   Flag X/C <-- |<- <- <- <- | <--- 0 - Enter a zero from the right
+ 			 ------------
+
+	; Addressing like ASL,ASR,LSR,ROL,ROR,ROXL,ROXR
+
+	Example:
+
+	Dx,Dy
+		lsl.w	d0,d1	; possible .b, .w and .l, the maximum shift in
+				; this case is 63 (the first 6 bits of the
+				; data register are used)
+
+	#<1-8>,Dy
+		lsl.w	#2,d1	; .b, .w and .l possible, maximum lsl.x #8,Dy
+
+	<ea>
+		lsl.w	(a1)	; only .w possible, equivalent to lsl.w #1,<ea>
+		lsl.w	(a1)+
+		lsl.w	-(a1)
+		lsl.w	$1234(a1)
+		lsl.w	$12(a1,d2.w)
+		lsl.w	$12(a1,d2.l)
+		lsl.w	$12(a1,a2.w)
+		lsl.w	$12(a1,a2.l)
+		lsl.w	$1234.w
+		lsl.w	$12345678
+
+***************************************************************** X N Z V C ***
+LSR      Logical Shift Right                Dx,Dy      BWL        * * * 0 *
+                                          #<1-8>,Dy
+                                            <ea>
+
+	Logical Shift to the right. By shift we mean a "scrolling" of bits, in 
+	this case towards the right, eg: %0100 shifted by 2: %0001
+	that is, the bits that make up the number are scrolled, "shifted" to 
+	the right. In each shift, the low bit of the destination register is 
+	copied to the Carry and eXtend bits, while the highest bit is CLEARED. 
+	(unlike the ASR, i.e. the ARITHMETIC SHIFT on the right, where the 
+	highest bit remains UNCHANGED)
+	FLAG: the oVerflow is reset, the eXtend and the Carry contain the low 
+	bit "out", Negative and Zero modified according to the operation.
+	
+				    value shifting 
+				    to the right
+				    ------------
+Enter a zero from the left - 0 --->|-> -> -> ->| ---> Flag X/C
+			    	    ------------
+
+	; Addressing like ASL,ASR,LSL,ROL,ROR,ROXL,ROXR
+
+	Example:
+
+	Dx,Dy
+		lsr.w	d0,d1	; .b, .w and .l possible, the maximum shift in
+				; this case is 63 (the first 6 bits of the
+				; data register are used)
+
+	#<1-8>,Dy
+		lsr.w	#2,d1	; .b, .w and .l possible, maximum lsr.x #8,Dy
+
+	<ea>
+		lsr.w	(a1)	; only .w possible, equivalent to lsr.w #1,<ea>
+		lsr.w	(a1)+
+		lsr.w	-(a1)
+		lsr.w	$1234(a1)
+		lsr.w	$12(a1,d2.w)
+		lsr.w	$12(a1,d2.l)
+		lsr.w	$12(a1,a2.w)
+		lsr.w	$12(a1,a2.l)
+		lsr.w	$1234.w
+		lsr.w	$12345678
+
+***************************************************************** X N Z V C ***
+MOVE     Between Effective Addresses      <ea>,<ea>    BWL        - * * 0 0
+
+	Copy the contents of the source operand to the destination one.
+	FLAG: the eXtend remains unchanged, the Overflow and Carry are reset, 
+	the Negative and the Zero are modified according to the operation.
+	Here the list would be too long, just a few examples:
+
+	<ea>,<ea>
+		move.w	$1234(a1),	(a0)	; destinations have been
+		move.w	$12(a1,a2.w),	(a0)	; spaced apart for greater
+		move.w	$1234.w,	(a0)+	; readability
+		move.w	label(pc),	-(a0)
+		move.w	label(pc,d2.l),	$1234(a1)
+		move.w	$12(a1,a2.w),	$12(a1,d2.w)
+		move.w	d1,		$12(a1,a2.w)
+		move.w	(a1)+,		$12(a1,a2.l)
+		move.w	-(a1),		$1234.w
+
+	note: to "move" to an address register directly, there is a dedicated 
+	MOVEA command (eg "movea.w d0, a0"). However, the assembler also 
+	accepts a simple move for the address registers, it will assemble 
+	MOVEA without problems.
+
+
+***************************************************************** X N Z V C ***
+MOVE     To CCR                           <ea>,CCR     -W-        I I I I I
+
+	MOVE instruction dedicated to modify the CCR, that is the Condition 
+	Code Register, which are the low 8 bits of SR, those of the condition 
+	codes. Makes a copy of the low 8 bits of the source operand to the low 
+	8 bits of the SR.
+	FLAG: Of course they are all changed, as we rewrite them!
+
+	Example:
+
+	<ea>,CCR
+		move.w	d1,ccr		; only .w
+		...			; etc., like normal MOVE.
+	
+		move.w	#$0012,ccr	; only the low byte of the source is
+					; copied to CCR, which is a BYTE!
+
+***************************************************************** X N Z V C ***
+MOVE     To SR                             <ea>,SR     -W-        I I I I I
+
+	*** PRIVILEGED INSTRUCTION! Execute only in supervisor mode! ***
+
+	This is a special move to modify the Status Register.
+	FLAGS: Obviously changed, since CCR is the low byte of SR!
+
+	Example:
+
+	<ea>,SR
+		move.w	d1,sr		; only .w
+		...			; Etcetera, like MOVE
+
+		move.w	#$1234,SR
+
+***************************************************************** X N Z V C ***
+MOVE     From SR                           SR,<ea>     -W-        - - - - -
+
+	*** PRIVILEGED INSTRUCTION! Execute only in supervisor mode! ***
+
+	Actually on 68000 it is not privileged, but on 68010/20/30/40/60 it 
+	has been made privileged, so running it in user mode would only cause 
+	a GURU on a1200 or other Amigas with 68010 or higher.
+	Copy the contents of the Status Register to the destination.
+
+	Es:
+
+	SR,<ea>
+		move.w	sr,d1		; only .w
+		move.w	sr,(a1)
+		move.w	sr,(a1)+
+		move.w	sr,-(a1)
+		move.w	sr,$1234(a1)
+		move.w	sr,$12(a1,d2.w)
+		move.w	sr,$12(a1,d2.l)
+		move.w	sr,$12(a1,a2.w)
+		move.w	sr,$12(a1,a2.l)
+		move.w	sr,$1234.w
+		move.w	sr,$12345678
+
+***************************************************************** X N Z V C ***
+MOVE     USP to/from Address Register      USP,An      --L        - - - - -
+                                           An,USP
+
+	*** PRIVILEGED INSTRUCTION! Execute only in supervisor mode! ***
+
+	Copies the User Stack Pointer, which is the pointer to the user mode 
+	stack (a7), into an address register, or vice versa.
+
+	Example:
+
+	USP,An
+		move.l	usp,a0
+
+	An,USP
+		move.l	a0,usp
+
+***************************************************************** X N Z V C ***
+MOVEA    MOVE Address                      <ea>,An     -WL        - - - - -
+
+	MOVE instruction dedicated to copying to An address registers.
+	Therefore, it is not possible to copy in byte length (.b).
+	note: the assembler also accepts "move" for "movea", so "move.l d1,a0" 
+	is assembled correctly without errors into "movea.l d1, a0".
+	So it is enough to always write "move", leaving the task of assembling 
+	correctly according to the case to ASMONE.
+	FLAG: None are changed
+
+	Tip: Always use the .L extension
+
+	Example:
+
+	<ea>,An
+		movea.l	d1,a0
+		movea.l	a1,a0
+		movea.l	(a1),a0
+		movea.l	(a1)+,a0
+		movea.l	-(a1),a0
+		movea.l	$1234(a1),a0
+		movea.l	$12(a1,d2.w),a0
+		movea.l	$12(a1,d2.l),a0
+		movea.l	$12(a1,a2.w),a0
+		movea.l	$12(a1,a2.l),a0
+		movea.l	$1234.w,a0
+		movea.l	$12345678,a0
+		movea.l	label(pc),a0
+		movea.l	label(pc,d2.w),a0
+		movea.l	label(pc,d2.l),a0
+		movea.l	label(pc,a2.w),a0
+		movea.l	label(pc,a2.l),a0
+
+		movea.l	#$1234,a0
+
+	Beware of the fact that if you do a MOVEA.W xxxx,ax, it will copy all 
+	32 bits, and not 16, as it might seem for the .w we enter. The 16-bit 
+	source operand is extended by sign to 32 bits, ie the value of the 
+	sign bit, 15, will be copied to bits 16 to 31. For example:
+
+		MOVEA.W	#$1234,a0	; a0=$00001234
+		MOVEA.W	#$9200,a0	; a0=$FFFF9200, because $9200 .w in
+					; SIGNED is negative (-28672)
+		MOVEA.L	#$9200,a0	; a0=$00009200, but then it is better
+					; to use: LEA $9200,a0
+
+	As you can see, for numbers below $7fff there are no differences 
+	between MOVEA.L and MOVEA.W, while there are for higher numbers.
+	It is therefore convenient to use the LEA xxxxx,x for values above 
+	$7fff, since there is no possibility of errors and it is faster.
+	Attention also in this case:
+
+	move.l	#$a000,d0	; address in d0
+	movea.w	d0,a0		; a0 = $FFFFa000
+
+	A movea.l was dedicatedly worthwhile!!!!
+
+***************************************************************** X N Z V C ***
+MOVEM    MOVE Multiple            <register list>,<ea> -WL        - - - - -
+                                  <ea>,<register list>
+
+	This instruction is used to copy a list of registers, data and / or 
+	addresses, into a memory area, or vice versa.
+	To define the list of addresses the following syntax is used: for 
+	consecutive registers write the first and last of the series separated 
+	by a "-", for example d0-d5 means d0, d1, d2, d3, d4, d5 .
+	For any non-series registers, they are specified by separating them 
+	from the other "solitary" registers or from the other series with a 
+	"/", for example: d0 / d3 / d6 indicates registers d0, d3, d6. Let's 
+	make a "mixed" case: d0 / d2 / d4-d7 / a0-a3 indicates registers d0, 
+	d2, d4, d5, d6, d7, a0, a1, a2, a3.
+	If the instruction is .word, the words are copied into the registers 
+	from memory, but are "extended" with 32-bit sign, ie bit 15 of the 
+	sign is repeated to fill bits 16 to 31.
+
+	Example:
+
+	<register list>,<ea>
+		movem.l	d0/d2/d4/d6/a0/a2,$12345678	; only .w or .l
+		movem.w	d0-d3/d6-d7/a6-a7,(a1)
+		movem.l	d3-d4/d6-d7/a3-a4,-(a1)
+		movem.w	d0-d7/a0-a1/a3-a4,$1234(a1)
+		movem.w	d6-d7/a1/a3/a5/a7,$12(a1,d2.w)
+		movem.l	d0/d2/d4/a3-a4/a6,$12(a1,d2.l)
+		movem.l	a0-a1/a3-a4/a6-a7,$12(a1,a2.w)
+		movem.w	d0-d1/d3-d4/d6-d7,$12(a1,a2.l)
+		movem.l	d0-d1/d3-d4/d6-d7,$1234.w
+		movem.w	d0-d1/d3-d4/d6-d7,$12345678
+
+	<ea>,<register list>
+		movem.w	(a1),d0-d7/a0-a6
+		movem.l	(a1)+,d0-d7/a0-a6
+		movem.w	$1234(a1),d0-d7/a0-a6
+		movem.l	$12(a1,d2.w),d0-d7/a0-a6
+		movem.w	$12(a1,d2.l),d0-d7/a0-a6
+		movem.w	$12(a1,a2.w),d0-d7/a0-a6
+		movem.l	$12(a1,a2.l),d0-d7/a0-a6
+		movem.l	$1234.w,d0-d7/a0-a6
+		movem.w	$12345678,d0-d7/a0-a6
+		movem.w	label(pc),d0-d7/a0-a6
+		movem.l	label(pc,d2.w),d0-d7/a0-a6
+		movem.w	label(pc,d2.l),d0-d7/a0-a6
+		movem.l	label(pc,a2.w),d0-d7/a0-a6
+		movem.w	label(pc,a2.l),d0-d7/a0-a6
+
+	A frequent use is to save and restore all or part of the registers to 
+	the stack:
+
+	movem.l	d0-d7/a0-a6,-(SP)	; save all registers on the stack
+	....
+	movem.l	(SP)+,d0-d7/a0-a6	; takes all registers from the stack
+
+	NOTE: the order of the registers is always the same, first the data 
+	registers, from the smallest to the largest, then the addresses. If 
+	you write:
+
+		movem.l	a0/d2-d4/a6/a2/d7,-(SP)
+
+	In practice it is assembled in the right order:
+
+		MOVEM.L	D2-D4/D7/A0/A2/A6,-(A7)
+
+	It is necessary to be careful of this fact, in order not to restore 
+	the "exchanged" registers, convinced instead that they are restored 
+	correctly.
+
+***************************************************************** X N Z V C ***
+MOVEP    MOVE Peripheral                  Dn,x(An)     -WL        - - - - -
+                                          x(An),Dn
+
+	This MOVE copies the low bytes of the source operand to the 
+	destination operand. Let's make some PRACTICAL examples:
+
+	Example 1:
+
+	x(An),Dn
+		movep.w	$1234(a1),d0	; .w and .l possible
+
+Word:
+	moveq	#0,d0
+	lea	dati(PC),a1
+	movep.w	0(a1),d0
+	rts			; d0 = $00001030
+
+LongWord:
+	lea	dati(PC),a1
+	movep.l	0(a1),d0
+	rts			; d0 = $10305070
+
+
+dati:
+	dc.l	$10203040
+	dc.l	$50607080
+
+	***	***	***	***
+
+	Example 2:
+
+	Dn,x(An)
+		movep.w	d0,$1234(a1)	; .w and .l possible
+
+Word:
+	move.l	#$10203040,d0
+	lea	dati(PC),a1
+	movep.w	d0,0(a1)
+	rts			; 0(a1) = $30004000
+
+LongWord:
+	move.l	#$10203040,d0
+	lea	dati(PC),a1
+	movep.l	d0,0(a1)
+	rts			; 0(a1) = $10002000 , $30004000
+
+dati:
+	dc.l	$00000000
+	dc.l	$00000000
+
+	This instruction is not used much, it is used above all to communicate 
+	with peripherals (it seems). However it could be used for some strange 
+	shuffling of bytes in your programs!
+	If you don't understand everything, Debug the routines.
+
+***************************************************************** X N Z V C ***
+MOVEQ    MOVE 8-bit immediate         #<-128.+127>,Dn  --L        - * * 0 0
+
+	Move Quick, instruction dedicated to loading a data register with an 
+	#Immediate value between -128 and +127, which is faster than the usual 
+	"MOVE.L #Immediate,Dn.
+	The operation is like a MOVE.L, and should always be used when 
+	possible, given its faster execution speed.
+	FLAG: the eXtend remains unchanged, the Overflow and Carry are reset, 
+	the Negative and the Zero are modified according to the operation.
+
+	Example:
+
+	#<-128.+127>,Dn
+		moveq	#10,d0
+		moveq	#-10,d0	; d0 = $FFFFFFF6
+
+***************************************************************** X N Z V C ***
+MULS     MULtiply Signed                   <ea>,Dn     -W-        - * * 0 0
+
+	Multiplication with sign. Two signed 16-bit numbers are multiplied, 
+	which can go from -32768 to +32767, so the maximum positive value that 
+	can be obtained is 1073741824, while the negative one is -1073709056, 
+	so a Carry or an Overflow cannot be present.
+	Only the low word of the source operands is read, therefore a number, 
+	eg. $00123456 is read as $00003456.
+	The 32-bit result is stored in the destination data register.
+	The sign of the result follows the rules + * + = +, + * - = -, - * + = 
+	-, - * - = +.
+	FLAG: the eXtend remains unchanged, the Overflow and Carry are reset, 
+	the Negative and the Zero are modified according to the operation.
+
+	Example:
+
+	<ea>,Dn
+		muls.w	d1,d0
+		muls.w	(a1),d0
+		muls.w	(a1)+,d0
+		muls.w	-(a1),d0
+		muls.w	$1234(a1),d0
+		muls.w	$12(a1,d2.w),d0
+		muls.w	$12(a1,d2.l),d0
+		muls.w	$12(a1,a2.w),d0
+		muls.w	$12(a1,a2.l),d0
+		muls.w	$1234.w,d0
+		muls.w	$12345678,d0
+		muls.w	label(pc),d0
+		muls.w	label(pc,d2.w),d0
+		muls.w	label(pc,d2.l),d0
+		muls.w	label(pc,a2.w),d0
+		muls.w	label(pc,a2.l),d0
+		muls.w	#$1234,d0
+
+	note: it is not possible to use an address register An as an operand
+
+***************************************************************** X N Z V C ***
+MULU     MULtiply Unsigned                 <ea>,Dn     -W-        - * * 0 0
+
+	Unsigned multiplication. Two 16-bit numbers are multiplied, the 32-bit 
+	result is stored in the destination data register.
+	On 68000 only the MULU.w is possible, unlike the 68020+.
+	Only the low word of the source operands is read, therefore a number, 
+	eg. $00123456 is read as $00003456.
+	Since both the multiplicand and the multiplier are 16-bit, i.e. max 
+	65535, the product cannot exceed 4294836225, the full long, therefore 
+	no overflow condition is possible.
+	FLAG: the eXtend remains unchanged, the Overflow and Carry are reset, 
+	the Negative and the Zero are modified according to the operation.
+
+	Example:
+
+	<ea>,Dn
+		mulu.w	d1,d0
+		mulu.w	(a1),d0
+		mulu.w	(a1)+,d0
+		mulu.w	-(a1),d0
+		mulu.w	$1234(a1),d0
+		mulu.w	$12(a1,d2.w),d0
+		mulu.w	$12(a1,d2.l),d0
+		mulu.w	$12(a1,a2.w),d0
+		mulu.w	$12(a1,a2.l),d0
+		mulu.w	$1234.w,d0
+		mulu.w	$12345678,d0
+		mulu.w	label(pc),d0
+		mulu.w	label(pc,d2.w),d0
+		mulu.w	label(pc,d2.l),d0
+		mulu.w	label(pc,a2.w),d0
+		mulu.w	label(pc,a2.l),d0
+		mulu.w	#$1234,d0
+
+	note: it is not possible to use an address register An as an operand
+
+***************************************************************** X N Z V C ***
+NEG      NEGate                             <ea>       BWL        * * * * *
+
+	This instruction performs the negation, that is, it subtracts the 
+	destination operand from 0, making it at least negative. (ex: 0-5 = -5 
+	!!!).
+
+	Example:
+
+	<ea>
+		neg.w	d1
+		neg.b	(a1)
+		neg.w	(a1)+
+		neg.l	-(a1)
+		neg.w	$1234(a1)
+		neg.b	$12(a1,d2.w)
+		neg.w	$12(a1,d2.l)
+		neg.b	$12(a1,a2.w)
+		neg.w	$12(a1,a2.l)
+		neg.l	$1234.w
+		neg.w	$12345678
+
+***************************************************************** X N Z V C ***
+NEGX     NEGate with eXtend                 <ea>       BWL        * * * * *
+
+	The only difference with NEG is that the eXtend flag is also 
+	subtracted from 0.
+
+***************************************************************** X N Z V C ***
+NOP      No OPeration                        NOP                  - - - - -
+
+	This "silly" instruction only serves to occupy "space", to be precise 
+	a word ($4e71), since nothing happens when you execute it, and not 
+	even the FLAGs are modified. Actually the main use is that of 
+	"NOP-ing", that is to copy the $4e71, that is the NOP, over the 
+	various SUBQ.W #1,LIVES, to make TRAINERS.
+	Woe to you if you think of generating delays by putting a spin of NOP 
+	or a DBRA cycle of NOP !! On fast processors this delay would 
+	"disappear". Delay only with the VBLANK or with the CIA timer!
+
+	Example:
+		nop
+
+***************************************************************** X N Z V C ***
+NOT      Complemento ad 1                   <ea>       BWL        - * * 0 0
+
+	Logical NOT of the destination. The NOT inverts the destination bit by 
+	bit:
+
+		NOT 0 = 1
+		NOT 1 = 0
+
+	For example, $12, or %00010010, would become %11101101
+	FLAG: the eXtend remains unchanged, the Overflow and Carry are reset, 
+	the Negative and the Zero are modified according to the operation.
+
+	Example:
+
+	<ea>
+		not.b	d1
+		not.w	(a1)
+		not.w	(a1)+
+		not.l	-(a1)
+		not.w	$1234(a1)
+		not.l	$12(a1,d2.w)
+		not.w	$12(a1,d2.l)
+		not.b	$12(a1,a2.w)
+		not.l	$12(a1,a2.l)
+		not.w	$1234.w
+		not.l	$12345678
+
+***************************************************************** X N Z V C ***
+OR       Bit-wise OR                       <ea>,Dn     BWL        - * * 0 0
+                                           Dn,<ea>
+
+	Bitwise logical OR of the source with the destination, result in the 
+	destination. Here is the OR table:
+
+	0 OR 0 = 0
+	0 OR 1 = 1
+	1 OR 0 = 1
+	1 OR 1 = 1
+
+	EITHER ONE OR THE OTHER BIT MUST BE 1 TO GIVE 1, basically. It can be 
+	used to set bits (as opposed to AND which is useful for clearing 
+	them). For example an OR.B #%00001111,d0 has the effect of setting the 
+	4 low bits, and leaving the 4 high bits unchanged.
+	FLAG: the eXtend remains unchanged, the Overflow and Carry are reset, 
+	the Negative and the Zero are modified according to the operation.
+
+	Example:
+
+	Dn,<ea>
+		or.w	d0,d1
+		or.b	d0,(a1)
+		or.w	d0,(a1)+
+		or.b	d0,-(a1)
+		or.w	d0,$1234(a1)
+		or.l	d0,$12(a1,d2.w)
+		or.w	d0,$12(a1,d2.l)
+		or.b	d0,$12(a1,a2.w)
+		or.w	d0,$12(a1,a2.l)
+		or.l	d0,$1234.w
+		or.w	d0,$12345678
+
+	<ea>,Dn
+		or.l	d1,d0
+		or.w	(a1),d0
+		or.w	(a1)+,d0
+		or.b	-(a1),d0
+		or.w	$1234(a1),d0
+		or.b	$12(a1,d2.w),d0
+		or.w	$12(a1,d2.l),d0
+		or.l	$12(a1,a2.w),d0
+		or.w	$12(a1,a2.l),d0
+		or.l	$1234.w,d0
+		or.b	$12345678,d0
+		or.w	label(pc),d0
+		or.w	label(pc,d2.w),d0
+		or.l	label(pc,d2.l),d0
+		or.w	label(pc,a2.w),d0
+		or.b	label(pc,a2.l),d0
+
+***************************************************************** X N Z V C ***
+ORI      Bit-wise OR with Immediate     #<data>,<ea>   BWL        - * * 0 0
+
+
+	Bitwise logical OR of the source with the destination, result in the 
+	destination. Here is the OR table:
+
+	0 OR 0 = 0
+	0 OR 1 = 1
+	1 OR 0 = 1
+	1 OR 1 = 1
+
+	EITHER ONE OR THE OTHER BIT MUST BE 1 TO GIVE 1, basically.
+	It can be used to set bits (as opposed to AND which is useful for 
+	clearing them). For example an OR.B #%00001111,d0 has the effect of 
+	setting the 4 low bits, and leaving the 4 high bits unchanged.
+	FLAG: the eXtend remains unchanged, the Overflow and Carry are reset, 
+	the Negative and the Zero are modified according to the operation.
+
+	Example:
+
+	#<data>,<ea>
+		ori.w	#$1234,		d1	; destinations have been
+		ori.b	#$12,		(a1)	; spaced apart for greater
+		ori.w	#$1234,		(a1)+	; readability
+		ori.l	#$12345678,	-(a1)
+		ori.w	#$1234,		$1234(a1)
+		ori.b	#$12,		$12(a1,d2.w)
+		ori.w	#$1234,		$12(a1,d2.l)
+		ori.l	#$12345678,	$12(a1,a2.w)
+		ori.b	#$12,		$12(a1,a2.l)
+		ori.w	#$1234,		$1234.w
+		ori.b	#$12,		$12345678
+
+		ori.b	#$12,ccr
+		ori.w	#$1234,sr	; *** PRIVILEGED INSTRUCTION
+
+***************************************************************** X N Z V C ***
+PEA      Push Effective Address             <ea>       --L        - - - - -
+
+	Load an address onto the stack. As a MOVE.L #Address,-(SP), so to 
+	speak. Beware that the stack pointer is moved 4 bytes further back, as 
+	when using the MOVE.L #Address,-(SP).
+	One use could be this, for example:
+
+	PEA	Copperlist(PC)
+	MOVE.L	(SP)+,$dff080
+
+	But why ever bother the Stack to point to a copperlist?
+	In fact, this instruction is not widely used.
+
+	Example:
+
+	<ea>
+		pea	(a1)
+		pea	$1234(a1)
+		pea	$12(a1,d2.w)
+		pea	$12(a1,d2.l)
+		pea	$12(a1,a2.w)
+		pea	$12(a1,a2.l)
+		pea	$1234.w
+		pea	$12345678
+		pea	label(pc)
+		pea	label(pc,d2.w)
+		pea	label(pc,d2.l)
+		pea	label(pc,a2.w)
+		pea	label(pc,a2.l)
+
+***************************************************************** X N Z V C ***
+ROL      ROtate Left                      #<1-8>,Dy    BWL        - * * 0 *
+                                            Dx,Dy
+                                            <ea>
+
+	Leftwise rotation of the bits. It performs a shift like LSL, but in 
+	this case the bits are "rotated", ie the bits that "go out" to the 
+	left end up in the Carry, but then are copied to the right in the 
+	empty space, unlike LSL where the "new" bits on the right are cleared.
+	For example, having %11100001, with a ROL # 2 we will have %10000111. 
+	(with LSL we would have had %10000100).
+	FLAG: eXtend not trusted, oVerflow reset, the others modified 
+	according to the operation. (In the carry the high bit)
+
+			    value that shifts 
+			    to the left
+			     ------------
+	     Flag C <---+<--|<- <- <- <-|<-+
+		    	|    ------------  |
+		    	 \_>____>_____>___/
+	The bit that goes out to the left comes in from the right!
+
+	; Addressing like ASL,ASR,LSL,LSR,ROR,ROXL,ROXR
+
+	Example:
+
+	Dx,Dy
+		rol.w	d0,d1	; .b, .w, .l possible, the maximum shift in
+				; this case is 63 (the first 6 bits of the
+				; data register are used)
+
+	#<1-8>,Dy
+		rol.w	#2,d1	; .b, .w, .l possible, maximum rol.x #8,Dy
+
+	<ea>
+		rol.w	(a1)	; only .w is possible; write rol.w #1,<ea> is
+		rol.w	(a1)+	; equivalent
+		rol.w	-(a1)
+		rol.w	$1234(a1)
+		rol.w	$12(a1,d2.w)
+		rol.w	$12(a1,d2.l)
+		rol.w	$12(a1,a2.w)
+		rol.w	$12(a1,a2.l)
+		rol.w	$1234.w
+		rol.w	$12345678
+
+***************************************************************** X N Z V C ***
+ROR      ROtate Right                     #<1-8>,Dy    BWL        - * * 0 *
+                                            Dx,Dy
+                                            <ea>
+
+	Right rotation of the bits. It performs a shift like LSR, but in this 
+	case the bits are "rotated", that is the bits that "go out" to the 
+	right end up in the Carry, but then are copied to the left in the 
+	empty space, unlike the LSR where the new bits a left are reset.
+	For example, having %10000111, with a ROR #2 we will have %11100001. 
+	(with LSR we would have had %00100001).
+	FLAG: eXtend not trusted, oVerflow reset, the others modified 
+	according to the operation. (the high bit in the carry)
+
+			    value that shifts 
+			    to the right
+			     ------------
+			+-->|-> -> -> ->|--+--> Flag C
+		    	|    ------------  |
+		    	\_<____<_____<____/
+	The bit that comes out on the right comes in from the left!
+
+	; Addressing like ASL,ASR,LSL,LSR,ROL,ROXL,ROXR
+
+	; like above
+
+	Example:
+
+	Dx,Dy
+		ror.w	d0,d1	; .b, .w, .l possible, the maximum shift in
+				; this case is 63 (the first 6 bits of the
+				; data register are used)
+
+	#<1-8>,Dy
+		ror.w	#2,d1	; .b, .w, .l possible, maximum ror.x #8,Dy
+
+	<ea>
+		ror.w	(a1)	; only .w possible, equivalent to ROR #1,<ea>
+		ror.w	(a1)+
+		ror.w	-(a1)
+		ror.w	$1234(a1)
+		ror.w	$12(a1,d2.w)
+		ror.w	$12(a1,d2.l)
+		ror.w	$12(a1,a2.w)
+		ror.w	$12(a1,a2.l)
+		ror.w	$1234.w
+		ror.w	$12345678
+
+***************************************************************** X N Z V C ***
+ROXL     ROtate Left with eXtend          #<1-8>,Dy    BWL        * * * 0 *
+                                            Dx,Dy
+                                            <ea>
+
+	Instruction like ROL, except that the most significant bit that is 
+	shifted ends up in the eXtend, as well as in the Carry.
+	Used for multiple precision shifts, since the eXtend flag enters from 
+	the right: it is sufficient to have the possible carry over of a 
+	previous shift, with a ROXL this shift will continue considering the 
+	previously generated eXtend flag.
+	Furthermore, flag X behaves as the "ninth" bit of the register (if .B) 
+	or the "seventeenth" if in .w, or the "thirty-second" in .L, and 
+	participates in the rotation, re-entering the register.
+
+			    value that shifts   the X flag is updated
+			    to the left        /
+			     ------------     /
+	     Flag C <---+<--|<- <- <- <-|<--|X|-<-+
+		    	|    ------------	  |
+		    	 \_>____>_____>____>__>__/
+	The bit that goes out to the left comes in from the right!
+
+	; Addressing like ASL,ASR,LSL,LSR,ROL,ROR,ROXR
+
+***************************************************************** X N Z V C ***
+ROXR     ROtate Right with eXtend         #<1-8>,Dy    BWL        * * * 0 *
+                                            Dx,Dy
+                                            <ea>
+
+	Instruction like ROR, except that the least significant bit that is 
+	shifted ends up in the eXtend, as well as in the Carry.
+	Furthermore, flag X behaves as the "ninth" bit of the register (if .B) 
+	or the "seventeenth" if in .w, or the "thirty-second" in .L, and 
+	participates in the rotation, re-entering the register.
+
+	Used for multiple precision shift
+
+    flag X updated	   value that shifts
+		     \     to the right
+		      \      ------------
+		  +->-|X|-->|-> -> -> ->|--+--> Flag C
+		  |  	     ------------  |
+		   \__<___<____<_____<____/
+	The bit that comes out on the right comes in from the left!
+
+***************************************************************** X N Z V C ***
+RTE      ReTurn from Exception               RTE                  I I I I I
+
+	Returns from an Exception, Trap, or Interrupt.
+	Flags modified by immediate data
+
+	Example:
+		rte
+
+***************************************************************** X N Z V C ***
+RTR      ReTurn and Restore                  RTR                  I I I I I
+
+	Return with reset of the CCR byte
+
+	Example:
+		rtr
+
+***************************************************************** X N Z V C ***
+RTS      ReTurn from Subroutine              RTS                  - - - - -
+
+	Return from a BSR or JSR. No flags changed
+
+	Example:
+		rts
+
+***************************************************************** X N Z V C ***
+Scc      Set to -1 if True, 0 if False      <ea>       B--        - - - - -
+
+	This instruction SETS all the bits of a byte, (it transforms it into 
+	$FF), provided that the cc conditions are satisfied, otherwise it 
+	RESETS that byte ($00). There are 2 instructions that always set or 
+	always reset that byte, they are ST and SF respectively.
+
+	Example:	(See Bcc for the description of the cc)
+
+	<ea>
+		st.b	d1	; Only .b - Always set
+		st.b	(a1)
+		st.b	(a1)+
+		st.b	-(a1)
+		st.b	$1234(a1)
+		st.b	$12(a1,d2.w)
+		st.b	$12(a1,d2.l)
+		st.b	$12(a1,a2.w)
+		st.b	$12(a1,a2.l)
+		st.b	$1234.w
+		st.b	$12345678
+
+	The same addressing for:
+
+		sf	<ea>	; only .b, Never Set, ALWAYS RESET
+
+		shi.s	<ea>	; > for unsigned numbers
+		sgt.w	<ea>	; > for numbers with sign
+		scc.s	<ea>	; >= for num. unsigned - also called SHS
+		sge.s	<ea>	; >= for numbers with sign
+		seq.s	<ea>	; = for all numbers
+		sne.w	<ea>	; >< for all numbers
+		sls.w	<ea>	; <= for num. unsigned
+		sle.w	<ea>	; <= for numbers with sign
+		scs.w	<ea>	; < for num. unsigned - also called SLO
+		slt.w	<ea>	; < for numbers with sign
+		spl.w	<ea>	; If Negative = 0 (PLus)
+		smi.s	<ea>	; If Negative = 1, (Minus) num. with sign
+		svc.w	<ea>	; V=0, no OVERFLOW
+		svs.s	<ea>	; V=1 OVERFLOW
+
+***************************************************************** X N Z V C ***
+STOP     Enable & wait for interrupts      #<data>                I I I I I
+
+	Example:
+		stop	#$1234
+
+***************************************************************** X N Z V C ***
+SUB      SUBtract binary                   Dn,<ea>     BWL        * * * * *
+                                           <ea>,Dn
+
+	This instruction subtracts the source operand from the destination 
+	operand and saves the result in the destination operand.
+	The flags are modified according to the outcome of the operation.
+	The C (Carry) flag is set if the subtraction produces a loan (ie the 
+	result does not "go in" the destination operand).
+
+
+	Example:
+
+	Dn,<ea>
+		sub.b	d0,d1
+		sub.w	d0,(a1)
+		sub.l	d0,(a1)+
+		sub.w	d0,-(a1)
+		sub.w	d0,$1234(a1)
+		sub.l	d0,$12(a1,d2.w)
+		sub.w	d0,$12(a1,d2.l)
+		sub.w	d0,$12(a1,a2.w)
+		sub.w	d0,$12(a1,a2.l)
+		sub.b	d0,$1234.w
+		sub.l	d0,$12345678
+
+	<ea>,Dn
+		sub.w	d1,d0
+		sub.l	a1,d0
+		sub.w	(a1),d0
+		sub.b	(a1)+,d0
+		sub.w	-(a1),d0
+		sub.b	$1234(a1),d0
+		sub.w	$12(a1,d2.w),d0
+		sub.l	$12(a1,d2.l),d0
+		sub.w	$12(a1,a2.w),d0
+		sub.l	$12(a1,a2.l),d0
+		sub.w	$1234.w,d0
+		sub.b	$12345678,d0
+		sub.w	label(pc),d0
+		sub.b	label(pc,d2.w),d0
+		sub.w	label(pc,d2.l),d0
+		sub.l	label(pc,a2.w),d0
+		sub.w	label(pc,a2.l),d0
+
+***************************************************************** X N Z V C ***
+SUBA     SUBtract binary from An           <ea>,An     -WL        - - - - -
+
+	SUB operation specific to address registers. It is therefore not 
+	possible to use the .b extension.
+	No flags are changed
+
+	Tip: ALWAYS use the .L extension
+
+	Example:
+
+	<ea>,An
+		suba.l	d1,a0
+		suba.l	a1,a0
+		suba.l	(a1),a0
+		suba.l	(a1)+,a0
+		suba.l	-(a1),a0
+		suba.l	$1234(a1),a0
+		suba.l	$12(a1,d2.w),a0
+		suba.l	$12(a1,d2.l),a0
+		suba.l	$12(a1,a2.w),a0
+		suba.l	$12(a1,a2.l),a0
+		suba.l	$1234.w,a0
+		suba.l	$12345678,a0
+		suba.l	label(pc),a0
+		suba.l	aa45(pc,d2.w),a0
+		suba.l	aa45(pc,d2.l),a0
+		suba.l	aa45(pc,a2.w),a0
+		suba.l	aa45(pc,a2.l),a0
+
+		suba.l	#$1234,a1	; note: for the subtraction of an
+					; #immediate from the Ax address 
+					; registers the SUBA is available and 
+					; not the SUBI. See the comment to 
+					; ADDA for the meaning acquired by .w 
+					; and .l in this case.
+
+***************************************************************** X N Z V C ***
+SUBI     SUBtract Immediate                #x,<ea>     BWL        * * * * *
+
+	SUB version specific for the subtraction of an #Immediate The flags 
+	are modified according to the result of the operation
+	The C (Carry) flag is set if the subtraction produces a loan (ie the 
+	result does not "go in" the destination operand).
+
+	Es:
+
+	#x,<ea>
+		subi.l	#$12345678,	d1	; destinations have been
+		subi.b	#$12,		(a1)	; spaced apart for greater
+		subi.w	#$1234,		(a1)+	; readability
+		subi.w	#$1234,		-(a1)
+		subi.b	#$12,		$1234(a1)
+		subi.l	#$12345678,	$12(a1,d2.w)
+		subi.w	#$1234,		$12(a1,d2.l)
+		subi.b	#$12,		$12(a1,a2.w)
+		subi.l	#$12345678,	$12(a1,a2.l)
+		subi.b	#$12,		$1234.w
+		subi.b	#$12,		$12345678
+
+		suba.w	#$1234,a1	; nota: for the subtraction of an 
+		#immediate from Ax address registers the SUBA is present and 
+		not the SUBIfor the subtraction of an #immediate from Ax 
+		address registers the SUBA is available and not the SUBI
+
+***************************************************************** X N Z V C ***
+SUBQ     SUBtract 3-bit immediate       #<data>,<ea>   BWL        * * * * *
+
+	It means SUB Quick, that is fast subtraction of a number from 1 to 8, 
+	which works exactly like the SUBI, therefore it is better to always 
+	use the SUBQ instead of the SUBI for the subtraction of numbers from 1 
+	to 8, since there is this dedicated instruction. Flags behave like 
+	ADD / SUB:
+	The C (Carry) flag is set if the subtraction produces a loan (ie the 
+	result does not "go in" the destination operand).
+	Negative = 1 if the result is negative, Negative = 0 if it is positive.
+	oVerflow = 1 if the result exceeds the .b, .w or .l size of the ADD
+	Zero = 1 if the result is Zero
+
+	Example:
+
+	#<data>,<ea>
+		subq.b	#1,d1
+		subq.w	#1,a1	; not possible in .b on address register Ax!
+		subq.w	#1,(a1)
+		subq.b	#1,(a1)+
+		subq.w	#1,-(a1)
+		subq.l	#1,$1234(a1)
+		subq.w	#1,$12(a1,d2.w)
+		subq.b	#1,$12(a1,d2.l)
+		subq.w	#1,$12(a1,a2.w)
+		subq.b	#1,$12(a1,a2.l)
+		subq.w	#1,$1234.w
+		subq.l	#1,$12345678
+
+***************************************************************** X N Z V C ***
+SUBX     SUBtract eXtended                  Dy,Dx      BWL        * * * * *
+                                         -(Ay),-(Ax)
+
+	"Extended" precision SUB instruction, since it subtracts the source 
+	operand and the eXtend bit from the target operand. See ADDX.
+
+
+	Example:
+
+	Dy,Dx
+		subx.w	d0,d1	; .b, .w and .l possible
+
+	-(Ay),-(Ax)
+		subx.w	-(a0),-(a1)	; .b, .w and .l possible
+
+
+***************************************************************** X N Z V C ***
+SWAP     SWAP words of Dn                    Dn        -W-        - * * 0 0
+
+	Exchange of the words of a data register. If for example we have d0 = 
+	$11223344, after a swap, d0 = $33441122
+	The HIGH word (bits 16-31) is exchanged with the LOW word (bits 0-15)
+
+	Example:
+		swap	d0
+
+***************************************************************** X N Z V C ***
+TRAP     Execute TRAP Exception           #<vector>               - - - - -
+
+	This instruction is used to generate Exceptions, it is usually used to 
+	execute instructions in supervisor mode.
+
+	Example:
+		trap	#0
+
+	Run the vector at the address $80.
+
+***************************************************************** X N Z V C ***
+TRAPV    TRAPV Exception if V-bit Set       TRAPV                 - - - - -
+
+	This instruction throws an exception (vector $1c), but only if at 
+	the moment of its execution the oVerflow bit is = 1
+
+	Example:
+		trapv
+
+***************************************************************** X N Z V C ***
+TST      TeST for negative or zero          <ea>       BWL        - * * 0 0
+
+	This instruction tests the target, updating the Negative and Zero 
+	flags. Used to check if the operand is zero or negative. The Carry and 
+	oVerflow flags are cleared.
+
+	Example:
+
+	<ea>
+		tst.w	d1	; note: you cannot do a TST on an Ax address
+		tst.w	(a1)	; register directly. "TST.W a0" is impossible.
+		tst.w	(a1)+
+		tst.w	-(a1)
+		tst.w	$1234(a1)
+		tst.w	$12(a1,d2.w)
+		tst.w	$12(a1,d2.l)
+		tst.w	$12(a1,a2.w)
+		tst.w	$12(a1,a2.l)
+		tst.w	$1234.w
+		tst.w	$12345678
+
+*******************************************************************************
+
+Now a list with the meanings of the GURU MEDITATION messages, in case the 
+computer resets you when running a program, at least you can know why and what 
+instruction it was:
+
+GURU $00000002	- BUS ERROR		($08)
+GURU $00000003	- ADDRESS ERROR		($0C)
+GURU $00000004	- ILLEGAL INSTRUCTION	($10)
+GURU $00000005	- DIVISION BY ZERO	($14)
+GURU $00000006	- CHK,CHK2		($18)	; on 68020+
+GURU $00000007	- TRAPV,TRAPCC		($1c)	; on 68020+
+GURU $00000008	- PRIVILEGE VIOLATION	($20)
+GURU $00000009	- TRACE			($24)
+GURU $0000000A	- LINEA EMULATOR 1010	($28)
+GURU $0000000B	- LINEF EMULATOR 1111	($2c)
+
+2) Bus error: the bus error occurs when accessing strange and non-existent
+	      addresses, and often it is the MMU that causes this error, in
+	      the computers that have it. (write in protected memory)
+
+3) Address error: If you try to execute or read a word or longword stored at
+		  an ODD address. Eg:
+
+	move.l	#$4e754e75,label ; write.l to odd address (on 68020 it is
+				 ; possible, this goes through ...)
+	bra.s	label		 ; salta ad indirizzo dispari (questo GURA
+	rts			 ; jump to odd address (this GURU also on a
+				 ; 68020+, since from 68020 onwards it has
+				 ; been made possible to move long to odd
+				 ; addresses, but it is always "forbidden" to
+				 ; jump to execute code at odd addresses.
+
+	dc.b	0	; one byte in the way
+label:
+	dc.b	0,0,0,0	; odd address!
+
+4) Illegal instruction: If binary code is executed that does not correspond to
+			any instruction of the 680x0. It can also be generated 
+			with the appropriate "ILLEGAL" instruction.
+
+5) Division by 0: It is not possible to divide a number by zero!!!
+
+8) Privilege Violation: If you try to execute a privileged instruction in USER
+			mode instead of SUPERVISOR mode.
+			For example, operate with ANDI, ORI, MOVE on the SR.
+
+A) LineA Emulator 1010: If you are running an unknown binary starting with
+			%1010, that is, $Axxx. There are no statements
+			starting this way, so this exception is thrown.
+
+B) LineF Emulator 1111: If you are running binary it starts with $Fxxx.
+			However, some of the math coprocessor and mmu
+			instructions start out this way, so while on a 
+			computer without mmu / fpu these codes will throw a 
+			LINE-F exception, in others 68882/68851 instructions 
+			might be executed.
+
+*******************************************************************************
+
+A table with powers of 2 might help... (max: one longword)
+
+       2^n		n
+  |_____________|_____________|
+	2		1
+	4		2
+	8		3
+	16		4
+	32		5
+	64		6
+	128		7
+	256		8
+	512		9
+	1024		10
+	2048		11
+	4096		12
+	8192		13
+	16384		14
+	32768		15
+	65536		16
+	131072		17
+	262144		18
+	524288		19
+	1048576		20
+	2097152		21
+	4194304		22
+	8388608		23
+	16777216	24
+	33554432	25
+	67108864	26
+	134217728	27
+	268435456	28
+	536870912	29
+	1073741824	30
+	2147483648	31
+	4294967296	32
+
+*******************************************************************************
+
+Finally, here is a short table on optimizations and advice on which 
+instructions to use rather than others; a whole chapter will be done on 
+optimizations, but for now LEARN this gospel by MEMORY, since if I see 
+instructions like "MOVE.L #label,a0" or "add.w #4,d0" I cry.
+
+ INSTRUCTION example	| EQUIVALENT, BUT FASTER
+------------------------|-----------------------------------------------
+add.X #6,XXX		| addq.X #6,XXX		(maximum 8)
+sub.X #7,XXX		| subq.X #7,XXX		(maximum 8)
+MOVE.X LABEL,XX		| MOVE.X LABEL(PC),XX	(if in the same SECTION)
+LEA LABEL,AX		| LEA LABEL(PC),AX	(if in the same SECTION)
+MOVE.L #30,d1		| moveq #30,d1		(min #-128, max #+127)
+CLR.L d4		| MOVEQ #0,d4		(for data registers only)
+ADD.X/SUB.X #12000,a3	| LEA (+/-)12000(a3),A3	(min -32768, max 32767)
+MOVE.X #0,XXX		| CLR.X XXX		; moving #0 is stupid!
+CMP.X  #0,XXX		| TST.X XXX		; il TST dove lo lasci?
+To reset a reg. Ax	| SUBA.L A0,A0		; better than "LEA 0,a0".
+JMP/JSR	XXX		| BRA/BSR XXX		(If XXX is close)
+MOVE.X #12345,AX	| LEA 12345,AX		(only address registers!)
+MOVE.L 0(a0),d0		| MOVE.L (a0),d0	(remove the offset if it is 0!!)
+LEA	(A0),A0		| HAHAHAHA! Remove this instruction! it has no effect!!
+LEA	4(A0),A0	| ADDQ.W #4,A0		; you never stop learning and
+						; optimizing huh !?
+
+; Below is a table to be taken a little with a grain of salt, since the
+; instructions given as equivalent are not exactly equivalent, especially 
+; because the remainder of the divisions are lost. However, it is always 
+; advisable to try if you can substitute a multiplication or a division, since 
+; they are the slowest instructions ever. You can check the "justification" of 
+; equality by consulting the table of powers of 2.
+
+MULU.w	#2,d0		| ADD.l d0,d0 ; it seems clear to me!
+MULU.w	#4,d0		| LSL.l #2,d0 ; sometimes it takes an EXT.L D0 first
+MULS.w	#4,d0		| ASL.l #2,d0 ; to eliminate any "dirt" in the high
+MULS.w	#8,d0		| ASL.l #3,d0 ; word, which in the case of MULS is not
+MULS.w	#16,d0		| ASL.l #4,d0 ; considered, while with ASL it is
+MULS.w	#32,d0		| ASL.l #5,d0 ; shifted together with the rest.
+MULS.w	#64,d0		| ASL.l #6,d0
+MULS.w	#128,d0		| ASL.l #7,d0
+MULS.w	#256,d0		| ASL.l #8,d0
+DIVS.w	#2,d0		| ASR.L #1,d0	; attention: IGNORE THE REMAINDER!!!
+DIVS.w	#4,d0		| ASR.L #2,d0
+DIVS.w	#8,d0		| ASR.L #3,d0
+DIVS.w	#16,d0		| ASR.L #4,d0
+DIVS.w	#32,d0		| ASR.L #5,d0
+DIVS.w	#64,d0		| ASR.L #6,d0
+DIVS.w	#128,d0		| ASR.L #7,d0
+DIVS.w	#256,d0		| ASR.L #8,d0
+DIVU.w	#2,d0		| LSR.L #1,d0	; attention: IGNORE THE REMAINDER!!!
+DIVU.w	#4,d0		| LSR.L #2,d0
+DIVU.w	#8,d0		| LSR.L #3,d0
+DIVU.w	#16,d0		| LSR.L #4,d0
+DIVU.w	#32,d0		| LSR.L #5,d0
+DIVU.w	#64,d0		| LSR.L #6,d0
+DIVU.w	#128,d0		| LSR.L #7,d0
+DIVU.w	#256,d0		| LSR.L #8,d0
+
+We have successfully used this substitution in the PRINT routine of the text 
+in lesson 8b.s, for example:
+
+	MULU.W	#8,d2
+
+Which has been transformed into:
+
+	LSL.W	#3,D2		; MULTIPLE THE PREVIOUS NUMBER BY 8, as the
+				; characters are 8 pixels high
+
+Let's take some examples:
+
+	muls.w	#4,d0
+
+	can be replaced with:
+
+	ext.l	d0
+	asl.l	#2,d0
+
+	Sometimes EXT is not necessary, if the high word of d0 is cleared.
+
+	-		-		-		-
+
+Finally, consider that they invented the Ax and Dx REGISTERS precisely to use 
+them to the maximum. For example, let's optimize a loop like this:
+
+
+	move.w	#2000-1,d7	; Number of loops
+Loop1:
+	move.w	#$0234,$dff180
+	move.w	#$0567,$dff182
+	move.w	#$089a,$dff184
+	move.w	#$0bcd,$dff186
+	dbra	d7,Loop1
+	rts
+
+Don't pay attention to the uselessness of the loop, let's suppose it serves 
+something, and that we want to speed it up: here's a decent speed up:
+
+
+	move.w	#$0234,d0
+	move.w	#$0567,d1
+	move.w	#$089a,d2
+	move.w	#$0bcd,d3
+	lea	$dff000,a0	; Base for offsets
+	move.w	#2000-1,d7	; Number of loops
+Loop1:
+	move.w	d0,$180(a0)
+	move.w	d1,$182(a0)
+	move.w	d2,$184(a0)
+	move.w	d3,$186(a0)
+	dbra	d7,Loop1
+	rts
+
+This loop is THOUSAND times faster, because moving a value from a Dx data 
+register is faster than a "move #xxx,dest", also accessing addresses through 
+address registers is faster than writing the address or label. By 
+"exaggerating", we could optimize more:
+
+
+	move.w	#$0234,d0
+	move.w	#$0567,d1
+	move.w	#$089a,d2
+	move.w	#$0bcd,d3
+	lea	$dff180,a0
+	lea	$dff182,a1
+	lea	$dff184,a2
+	lea	$dff186,a3
+	move.w	#2000-1,d7	; Number of loops
+Loop1:
+	move.w	d0,(a0)
+	move.w	d1,(a1)
+	move.w	d2,(a2)
+	move.w	d3,(a3)
+	dbra	d7,Loop1
+	rts
+
+We have now engaged 3 more address registers, but we save the offsets, which 
+increases the speed even more and reduces the size of the code!
+Obviously these optimizations are only useful in loops or pieces of code that 
+are executed very often.

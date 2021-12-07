@@ -1,0 +1,600 @@
+
+ CORSO DI ASSEMBLER - LEZIONE 6
+
+In this lesson we will see how to display text on the screen, how to scroll 
+screens larger than the video window, and how to use default value tables to 
+simulate bouncing and swaying movements.
+
+Learning to visualize writing on the screen is very important, you cannot do 
+without a character printing routine in a game or in a graphic demo: if we 
+want to write the score and the number of lives, or a message between one 
+level and another, or the dialogue between the characters, a message with 
+greetings to friends, etc.
+it is clear that no 320x256 images are displayed with the writing already 
+done! Imagine you want to display 5 pages of text to introduce the story of 
+your game: "a knight of an unspecified historical period decided to go in 
+search of the holy grail ..." and so on.
+There are two solutions: or you draw five images with the printed text with 
+the drawing program, and in this case we would have 5 images of 40 * 256 = 
+51200 bytes used, which steal disk space and memory, or with 1k of FONT 
+characters and a few routine bytes that print those fonts do the same job, 
+saving 50k.
+You will have the operating system character FONTS present: TOPAZ,DIAMOND
+etcetera, which can you choose?
+Well we don't care about the system FONT, because we use our own.
+You can also use the system fonts, but they are limited, while making the 
+fonts and the routine that prints the characters of that font you can view 
+writings of any size, even colored, just draw the font and make the right 
+routine.
+Once you understand the PRINT system, that is the PRINTING of the characters, 
+you can make changes without difficulty.
+To begin, let's see how to print a small font, 8 pixels wide and 8 pixels 
+high, in a single color.
+First of all you need to have a BITPLANE to print the text and a CHARACTER 
+FONT where all the characters to be copied are drawn.
+For the bitplane there are no problems, in fact it is enough to create in the 
+listing a piece of memory cleared of the size of a bitplane, and "point it", 
+that is to make it visualized. To make a zeroed space you can use the command 
+DCB.B 40 * 256,0 which, in fact, creates a zeroed space of the right size; but 
+there is a specific SECTION for zeroed "BUFFERS":
+the section BSS, in which only the DS.B / DS.w / DS.l directive can be used, 
+which establishes how many cleared bytes / words / longwords to create. The 
+advantage lies in the final length of the EXECUTABLE FILE: while creating the 
+zeroed space with a: "BITPLANE: dcb.b  40*256,0" 10240 bytes are added to the 
+total length of the file, defining a Section BSS:
+
+	SECTION	UnBitplaneQua,BSS_C	; _C means that it must be loaded in
+					; CHIP RAM, without the _C it would be
+					; loaded anywhere, even in FAST RAM,
+					; but the bitplanes must be in CHIP RAM.
+BITPLANE:
+	ds.b	40*256		; 10240 bytes to zero
+
+A HUNK of a few bytes will be added to the file which will "be worth" 40 * 256 
+bytes when the file is loaded into memory. The "dcb.b 40 * 256,0" is like 
+having a bulky bag of 100 lire coins, while the "ds.b 40 * 256" is like a 
+small 100,000 lire note. The result is the same, but the file is leaner.
+
+Note that the "ds.b 40 * 256" is not followed by the ", 0" as in the "DCB", in 
+fact the "DS" always indicates zeros, while the DCB can store any value 
+repeated X times.
+
+Now we have the "PIECE OF PAPER" to write our things on, but we have neither 
+the font nor the routine that prints.
+Let's see what a FONT is and how it is made. A font is a file that contains 
+the words and numbers needed to write, and can be of various formats.
+The font is nothing more than a row of characters one below the other, 
+precisely they are ALL the characters in a row: "ABCDEFGHI ...".
+Certain fonts are designed in .IFF, which is a screen with characters:
+
+	 ------------
+	|ABCDEFGHIJKL|
+	|MNOPQRSTUVWX|
+	|YZ1234567890|
+	|	     |
+	|	     |
+	 ------------
+
+The drawing is then converted to RAW, and the characters are taken from that 
+image and copied to the bitplane: if an "A" is to be printed, it is copied 
+from the FONT in RAW to the BITPLANE, with moves, and the "A" appears on the 
+bitplane. So every time you need an "A" we know where it is and we copy it 
+from the FONT, so also for the other letters.
+Let's talk about the system used in 8x8 fonts in this course: characters take 
+up 8 pixels * 8 pixels, so they are the same size as the kickstart FONT. In 
+reality they are narrower as they must also contain the "spacing" of a pixel 
+between one word and another, or the writing would appear in italics!!
+The characters are then placed in the "right" order, that is, respecting the 
+ASCII one, which is the following:
+
+	dc.b	$1f,' !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNO
+	dc.b	'PQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~',$7F
+
+The initial $1f and the final $7f indicate that the first character, SPACE, is 
+the one after the $1f, ie the $ 20, following "!" which is the $21 and so on, 
+while after the last few characters you get to the $7f. This is to give you an 
+idea of the arrangement of the ASCII characters. We have already talked about 
+the fact that numbers can also be ASCII characters, just try a "? $21", 
+verifying that the result is given in hexadecimal ($), decimal, ASCII "...!", 
+And binary. We also saw that a:
+
+	dc.b	"CANE"
+
+is equivalent to:
+
+	dc.b	$63,$61,$6e,$65
+
+In fact "C" in memory is $63, "A" is $61 and so on.
+In fact, each character occupies one byte in memory, and a text 5000 bytes 
+long contains 5000 characters.
+Returning to our font, imagine an image only 8 pixels wide, and high enough to 
+contain all the characters placed one under the other:
+
+!
+"
+#
+$
+%
+&
+'
+(
+)
+*
++
+,
+-
+.
+/
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+:
+;
+<
+=
+>
+?
+@
+A
+B
+C
+D
+E
+F
+G
+H
+I
+J
+K
+L
+M
+N
+O
+
+ETC ETC .....
+
+The 8x8 font we use in the course is nothing more than such an image in RAW.
+In reality this type of font is normally made with a special EDITOR, a program 
+dedicated to the design of these 8x8 one-color fonts.
+For larger and more colorful fonts, however, it is better to draw the letters 
+in an image, usually 320x256, and use your own routine to pick up the 
+characters to be printed. To begin with, however, let's see the simplest font 
+as it is printed on the screen: first you need to prepare a text string with 
+the words to be printed, for example:
+
+	dc.b	"Prima scritta!"	; note: you can use '' or ""
+
+	EVEN				; that is, it aligns to EVEN address
+
+The EVEN directive is used to avoid odd addresses for instructions or data 
+found below the dc.b. The text strings are made up of bytes and it can happen 
+that they are an odd number, in which case the following label will be at an 
+odd address, and this can generate assembly errors: in fact, in 68000, the 
+instructions must always be at even addresses, and also the data should be at 
+even addresses to avoid GURU MEDITATION at runtime, in fact a MOVE.L or MOVE.W 
+executed on an odd address causes a nice Crash with GURU MEDITATION and 
+explosions.
+So remember to always put an EVEN at the end of a text string, or to make sure 
+it is even.
+You can also add an extra zero to the end of the string to equalize the score, 
+as I did for GfxName:
+
+GfxName:
+	dc.b	"graphics.library",0,0
+
+You can also write:
+
+GfxName:
+	dc.b	"graphics.library",0
+	even
+
+In fact, one zero at the end of the text is enough, the other will be inserted 
+by EVEN.
+So, once you have established the text string to display, just see how to copy 
+the right characters to the right place.
+I now propose the routine that prints a character:
+
+PRINT:
+	LEA	TESTO(PC),A0	; Address of the text to be printed in a0
+	LEA	BITPLANE,A3	; Destination bitplane address in a3
+	MOVEQ	#0,D2		; Clear d2
+	MOVE.B	(A0),D2		; Next character in d2
+	SUB.B	#$20,D2		; REMOVE 32 FROM THE ASCII VALUE OF THE
+				; CHARACTER, SO AS TO TRANSFORM, FOR EXAMPLE,
+				; THAT OF THE SPACE (which is $20), into $00,
+				; that OF THE ASTERISK ($21), into $01 ...
+	MULU.W	#8,D2		; MULTIPLY THE PREVIOUS NUMBER BY 8,
+				; the characters being 8 pixels high
+	MOVE.L	D2,A2
+	ADD.L	#FONT,A2	; FIND YOUR DESIRED CHARACTER IN THE FONT ...
+
+				; WE PRINT THE FONT LINE BY LINE
+	MOVE.B	(A2)+,(A3)	; prints LINE 1 of the character
+	MOVE.B	(A2)+,40(A3)	; print LINE 2 " "
+	MOVE.B	(A2)+,40*2(A3)	; print LINE 3 " "
+	MOVE.B	(A2)+,40*3(A3)	; print LINE 4 " "
+	MOVE.B	(A2)+,40*4(A3)	; print LINE 5  " "
+	MOVE.B	(A2)+,40*5(A3)	; print LINE 6  " "
+	MOVE.B	(A2)+,40*6(A3)	; print LINE 7  " "
+	MOVE.B	(A2)+,40*7(A3)	; print LINE 8  " "
+
+	RTS
+
+Have you already understood???
+Let's analyze it point by point:
+
+	LEA	TESTO(PC),A0	; Address of the text to be printed in a0
+	LEA	BITPLANE,A3	; Destination bitplane address in a3
+	MOVEQ	#0,D2		; Clear d2
+	MOVE.B	(A0),D2		; Next character in d2
+
+So far there are no problems, we have the value of the character in d2, if it 
+were an "A", then we have $41 in d2
+
+	SUB.B	#$20,D2		; REMOVE 32 FROM THE ASCII VALUE OF THE
+				; CHARACTER, SO AS TO TRANSFORM, FOR EXAMPLE,
+				; THAT OF THE SPACE (which is $20), into $00,
+				; that OF THE ASTERISK ($21), into $01 ...
+
+Here too what happens is clear, let's see why we subtract 32 ($20):
+
+	MULU.W	#8,D2		; MULTIPLE THE PREVIOUS NUMBER BY 8,
+				; the characters being 8 pixels high
+	MOVE.L	D2,A2
+	ADD.L	#FONT,A2	; FIND YOUR DESIRED CHARACTER IN THE FONT ...
+
+This operation leads to having in A2 the address of the character "A" present 
+in the font, that is the address from where we have to "get" the character to 
+copy it into the bitplane we are viewing.
+Let's see what happened: remember that the characters were put into the font 
+in the same order as the ASCII standard? So, having the ASCII value of the 
+character, in this case $41 for the "A", we can identify how far from the 
+beginning of the FONT the "A" is in RAW! If each character is 8x8 pixels, it 
+means that it is 8 bits long, ie one byte per line * 8 lines, in total 8 bytes.
+So the space (the first character in the FONT) is at the beginning of the FONT 
+itself and ends at byte 8, where "!" starts (the second), and so on.
+Having subtracted $20 from the ASCII value, the space value will become $00, 
+the next "!" $01, etc. (the "A" will be $21), so just multiply the number 
+obtained after the subtraction by 8 to get the distance, from the beginning of 
+the FONT, of the character in question!!! Let's review the passage:
+
+	SUB.B	#$20,D2		; REMOVE 32 FROM THE ASCII VALUE OF THE
+				; CHARACTER, SO AS TO TRANSFORM, FOR EXAMPLE,
+				; THAT OF THE SPACE (which is $20), into $00,
+				; that OF THE ASTERISK ($21), into $01 ...
+	MULU.W	#8,D2		; MULTIPLY THE PREVIOUS NUMBER BY 8,
+				; the characters being 8 pixels high
+
+Now in D2 we have the distance (the offset) of the beginning of the character 
+from the beginning of the FONT! Now to find the actual address of the 
+character, we add the "distance from the beginning" we have in D2 to the 
+address of the FONT:
+
+	MOVE.L	D2,A2
+	ADD.L	#FONT,A2	; FIND YOUR DESIRED CHARACTER IN THE FONT...
+
+Now we have in A2 the address where our character to be copied is, for example 
+the "A". Now it will be enough to copy it from FONT to the screen, that is to 
+the BITPLANE 320x256, in which each line is 40 bytes long:
+
+				; WE PRINT THE FONT LINE BY LINE
+	MOVE.B	(A2)+,(A3)	; prints LINE 1 of the character
+	MOVE.B	(A2)+,40(A3)	; print LINE 2 " "
+	MOVE.B	(A2)+,40*2(A3)	; print LINE 3 " "
+	MOVE.B	(A2)+,40*3(A3)	; print LINE 4 " "
+	MOVE.B	(A2)+,40*4(A3)	; print LINE 5  " "
+	MOVE.B	(A2)+,40*5(A3)	; print LINE 6  " "
+	MOVE.B	(A2)+,40*6(A3)	; print LINE 7  " "
+	MOVE.B	(A2)+,40*7(A3)	; print LINE 8  " "
+
+Copying takes place by "lines", in fact the character is 8 lines high, each of 
+which is 8 bits wide (1 byte):
+
+	12345678
+
+	...###.. line 1 - 8 bit, 1 byte
+	..#...#. 2
+	..#...#. 3
+	..#####. 4
+	..#...#. 5
+	..#...#. 6
+	..#...#. 7
+	........ 8
+
+So to copy it one line at a time you need to copy it one byte at a time.
+But the target screen is 40 bytes per line wide, and we have to consider that 
+each line must be aligned one below the other, if we don't skip 40 bytes each 
+time we would copy the character:
+
+	...###....#...#...#...#...#####...#...#...#...#...#...#.........
+
+Instead we have to copy a byte, then GO TO THE TOP skipping 40 bytes, and copy 
+another byte:
+
+	MOVE.B	(A2)+,(A3)	; prints LINE 1 of the character
+
+On the monitor:
+
+	...###..
+
+	MOVE.B	(A2)+,40(A3)	; print LINE 2 (40 bytes after)
+
+On the monitor:
+
+	...###..
+	..#...#.
+
+
+	MOVE.B	(A2)+,40*2(A3)	; print LINE 3 (80 bytes after)
+
+On the monitor:
+
+	...###..
+	..#...#.
+	..#...#.
+
+Etcetera. For an 80 bytes wide screen (640x256 HIRES) it would be enough to 
+change the routine like this:
+
+	MOVE.B	(A2)+,(A3)	; print LINE 1 of the character
+	MOVE.B	(A2)+,80(A3)	; print LINE 2  " "
+	MOVE.B	(A2)+,80*2(A3)	; print LINE 3  " "
+	MOVE.B	(A2)+,80*3(A3)	; print LINE 4  " "
+	MOVE.B	(A2)+,80*4(A3)	; print LINE 5  " "
+	MOVE.B	(A2)+,80*5(A3)	; print LINE 6  " "
+	MOVE.B	(A2)+,80*6(A3)	; print LINE 7  " "
+	MOVE.B	(A2)+,80*7(A3)	; print LINE 8  " "
+
+Let's see in practice the printing of this "A" on a bitplane in Lesson6a.s
+
+We will now move on to printing an entire line of text with Lesson6b.s
+
+And finally we print as many lines as we want in Lesson6c.s. This routine is 
+the DEFINITIVE one, which you can use when you want to write something on the 
+screen.
+
+Why not design your own font? In Lesson6c2.s the FONT is listed in dc.b like 
+this example:
+
+; "B"
+	dc.b	%01111110
+	dc.b	%01100011
+	dc.b	%01100011
+	dc.b	%01111110
+	dc.b	%01100011
+	dc.b	%01100011
+	dc.b	%01111110
+	dc.b	%00000000
+
+Characters are stored with dc.b % (binary). You can change every single 
+character as you like. If you make your own font, save it on a formatted disk 
+or on the HARD DISK!
+
+
+Now we have a chance to experience something we've never done before:
+in the same screen we try to combine an image in 8-color LOWRES and a bitplane 
+in HIRES. In fact, the Amiga can display different video resolutions at the 
+same time, (which I do not know the MSDOS PC can do), just put a WAIT in the 
+copperlist and redefine the BPLCON0 under it, just as if we were defining the 
+colors to make a gradient!
+For example, we could display from the first line to the $50 line an image in 
+HAM with 4096 colors in LOWRES, below it one in HIRES in 16 colors, below it 
+again in LOWRES in 32 colors, and so on. In some games, for example, the 
+screen where the characters move is in LOWRES, while the panel with the score 
+and the like is in HIRES (see AGONY).
+We immediately visualize the image in LOWRES above one in HIRES in Lesson6d.s
+
+Now let's see a "trick" that allows us to obtain a "RELIEF" effect on the 
+words we print: in Lesson6e.s we activate 2 bitplanes instead of 1 and we 
+superimpose the second on the first, but the second moved down by a line. What 
+happens if we put two identical transparent images on top of each other? The 
+image is doubled!!! And if we choose the right colors, making the split in 
+"high" lighter and darker in the "BOTTOM" one, what happens? We figured out 
+how Lezione6e.s works.
+
+Speaking of overlaps, why not activate a bitplane "ABOVE" an image to write 
+on?? Let's see what happens in Lesson 6f.s.
+
+In Lesson6g.s the "TRANSPARENCY" effect is highlighted by moving the text 
+above the image.
+
+In Lezione6h.s, on the other hand, you will find a way to print texts in 3 
+colors, overlapping two texts in two bitplanes.
+
+In Lesson6i.s one of the 3 colors of the text is made to blink, using a TABLE 
+of predefined values. We have already talked about TABLES in LESSON 1, now 
+let's see in practice the advantage they bring.
+
+In Lesson6l.s a variation of the routine that reads from a TAB is used to var 
+vary a color; the variation consists in the fact that instead of reading from 
+the beginning to the end of the table and starting all over again, it reads 
+the table backwards, that is, from the end to the beginning.
+
+Tables can be useful or indispensable for many uses, for example to simulate 
+bouncing or swinging movements. We see in practice the superiority of the use 
+of a table compared to simple ADD and SUB in the movement of an image in 
+Lesson 6m.s
+
+
+Speaking of movement, for now we have seen the horizontal scroll through the 
+BPLCON1 ($dff102) which allows a maximum scrolling of 16 pixels.
+So how do you swipe the screen left and right as much as you want?? The answer 
+is quite simple: just use pointers to bitplanes too! In fact, through the 
+pointers to the bitplanes we have already seen that we can scroll up and down, 
+just add or subtract the length of a line (40 in lowres and 80 in HIRES). But 
+we can also scroll forward and backward, for the precision in "jumps" of 8 
+pixels at a time, just subtract or add 1 to the bitplane pointer and we have 
+moved the figure to the right or left by one byte, that is 8 bits, or 8 pixels.
+If we can scroll 8 pixels at a time with the Bitplane Pointers and 1 at a time 
+with the $dff102 (BPLCON1), it will be enough to scroll 8 pixels one at a time 
+with the $dff102, in fact, then "shoot" 8 pixels later with a:
+
+ subq.l #1,BITPLANEPOINTER
+
+And at the same time reset the BPLCON1 ($dff102), going to the ninth pixel, 
+then scroll another 8 pixels with the $dff102 one pixel at a time, reaching 
+pixel 9 + 8 = $11, then shoot forward 8 pixels with the Bitplane Pointer etc. 
+In the examples, however, considering that the $dff102 can flow up to a 
+maximum of $FF, that is from 0 to 15, and not only from 0 to 7, I have adopted 
+this technique: to scroll 16 pixels at a time just add or subtract 2 to the 
+bitplane pointers (since with 1 we moved the PIC by 8 pixels).
+So I scroll one pixel at a time with $ dff102 using its maximum option, ie 
+from $00 to $FF, total 16 positions, then "snap" to the following 16 pixels 
+with an ADDQ or SUBQ # 2, BITPLANEPOINTERS.
+Here is a routine that scrolls right a bitplane one pixel at a time for as 
+many pixels as we want: consider that MIOBPCON1 is the byte of the $dff102.
+
+
+Destra:
+	CMP.B	#$ff,MIOBPCON1	; have we reached the maximum scroll? (15)
+	BNE.s	CON1ADDA	; if not yet, scroll forward 1 with the BPLCON1
+
+;	Reads the bitplane address
+
+	LEA	BPLPOINTERS,A1	; With these 4 instructions we take from the
+	move.w	2(a1),d0	; copperlist the address where it is pointing
+	swap	d0		; the $dff0e0 currently and we place it in d0
+	move.w	6(a1),d0
+
+;	Scroll right 16 pixels with the bitplane pointer
+
+	subq.l	#2,d0		; points 16 bits further back (PIC scrolls to
+				; the right by 16 pixels)
+
+;	Restarts the BPLCON1 from zero
+
+	clr.b	MIOBPCON1	; reset hardware scroll BPLCON1 ($dff102)
+				; in fact we "jumped" 16 pixels with the
+				; bitplane pointer, now we have to start from 
+				; scratch with the $dff102 to scroll right one 
+				; pixel at a time.
+
+	move.w	d0,6(a1)	; copies the LOW word of the plane address
+	swap	d0		; swap the 2 words
+	move.w	d0,2(a1)	; copies the HIGH word of the plane address
+	rts			; get out of the routine
+
+CON1ADDA:
+	add.b	#$11,MIOBPCON1	; scroll the image to the right 1 pixel
+	rts			; get out of the routine
+
+
+The routine increases BPLCON1 ($dff102) by one, passing it through the 16
+possible positions: 00,11,22,33,44,55,66,77,88,99,aa,bb,cc,dd,ee,ff then jump 
+to pixel ff + 1 doing 2 operations:
+
+1) Point the bitplanes pointers 2 bytes (1 word, 16 bits) further back,
+   sliding the image to the right by 16 pixels (therefore 1 pixel after the
+   $FF position, i.e. 15 once the previous frame from the $dff102 is reached
+
+2) Reset the $dff102, since we "skipped" 16 pixels, otherwise the 16 pixels 
+   added with the Bitplane Pointer and the 15 ($FF) reached with the $dff102 
+   (BPLCON1) would be added. Instead, by resetting the BPLCON1 we start again 
+   from $00 + 16 = sixteenth pixel, after which we will go to the following 
+   15 with the BPLCON1, leaving the bitplane pointer unchanged.
+
+If it is not yet clear, follow this diagram, bearing in mind that # is the 
+"image" that we move to the right:
+
+				; VAL. BPLCON1	- BYTE SUBTR. FROM BPL-POINTERS
+
+#				;	$00	-	0	- tot. pixel:
+ #				;	$11	-	0	-	1
+  #				;	$22	-	0	-	2
+   #				;	$33	-	0	-	3
+    #				;	$44	-	0	-	4
+     #				;	$55	-	0	-	5
+      #				;	$66	-	0	-	6
+       #			;	$77	-	0	-	7
+	#			;	$88	-	0	-	8
+	 #			;	$99	-	0	-	9
+	  #			;	$aa	-	0	-	10
+	   #			;	$bb	-	0	-	11
+	    #			;	$cc	-	0	-	12
+	     #			;	$dd	-	0	-	13
+	      #			;	$ee	-	0	-	14
+	       #		;	$ff	-	0	-	15
+		#		;	$00	-	2	-	16
+		 #		;	$11	-	2	-	17
+		  #		;	$22	-	2	-	18
+		   #		;	$33	-	2	-	19
+		    #		;	$44	-	2	-	20
+		     #		;	$55	-	2	-	21
+		      #		;	$66	-	2	-	22
+		       #	;	$77	-	2	-	23
+
+etcetera....
+
+This scheme speaks for itself: for example, if we want to shift a bitplane to 
+the right by 22 pixels, just subtract 2 from the bitplane pointer and put $66 
+on the BPLCON1 ($dff102).
+
+To scroll left we will have to add 2 to the bitplanes pointers every 16 pixels 
+and proceed in reverse with the $dff102: $ff,$ee,$dd.....
+
+We see in Lesson 6n.s the routine in operation.
+You will notice an unexpected: a jerky noise occurs on the left side; this is 
+not due to errors in the routine, but to a characteristic of the Amiga 
+hardware, to remove it just a little trick already present in the recommended 
+modifications of the listing itself.
+
+Since we know how to scroll as much as we want horizontally, why not scroll a 
+bitplane larger than the video window?? Exactly, we slide a 640 pixel wide 
+screen into a 320 pixel wide one by moving it left and right, all this in 
+Lesson6o.s
+
+We have already seen for tables the use of a longword as a pointer to an 
+address:
+
+POINTER:
+	DC.L	TABELLA
+
+The table address is assembled in the longword "POINTER", so we can "keep 
+track" of where we have arrived in the table by adding or subtracting the 
+length of an element of the table.
+We have to save the address we arrived at each time because the routine runs 
+every frame and not continuously, so other routines can also be run before 
+that routine is run again. When this routine is rerun, it must continue to 
+fetch values from the table where it left off before, and can do so by reading 
+the address in POINTER: with a simple:
+
+	MOVE.L	POINTER(PC),d0		; In d0 the address where we arrived
+					; last time.
+
+Before exiting the routine, just save the last position.
+This can be used for many purposes, for example to be able to print only one 
+character per frame, instead of printing all the text and then viewing it. To 
+do this, just modify the PRINT routine and make two pointers: one that points 
+to the last character printed, and one that points to the last address in the 
+bitplane where we printed the last character.
+In this way it is as if we print a character, freeze the routine for a whole 
+frame, reactivate it to print a character, then refreeze it and so on. In 
+reality, instead of freezing it, we execute it to print a single character, 
+then we save the point where we arrived, we exit the routine, we wait for the 
+frame to pass, we rerun the routine starting from the point where we arrived, 
+we save everything, we exit and so on.
+The listing that puts this possibility into practice is Lezione6p.s
+
+
+In a bitplane, in addition to printing text, we can also create designs with 
+special routines, such as checkerboards, trame(italian) and textures. Just set 
+the right bits to 1!!! In Lesson6q.s there are some example routines.
+
+
+We have reached the end of LESSON 6, we just have to put together the listings 
+and the "news" of this lesson in the usual final example list with music: 
+Lesson6r.s
+
+
+Now we will move on to the study of sprites. What you have to do is load 
+LESSON7.TXT, after which you have to change the path to load the incbins of 
+its listings, with "V DF0:SOURCES3"
+The sources, in fact, are located in the SOURCES3 directory of disk 1.
+
